@@ -3274,14 +3274,10 @@ function Es() {
 	return String(e).replace(/\/$/, "");
 }
 function Q() {
-	let e = Es();
-	try {
-		if (new URL(e).port === "8188") return "/at";
-	} catch {}
-	return "/api/comfy";
+	return "/at";
 }
 function Ds() {
-	return Q() === "/at" && typeof window < "u" && window.location?.origin && window.location.protocol !== "file:" ? window.location.origin.replace(/\/$/, "") : Es();
+	return typeof window < "u" && window.location?.origin && window.location.protocol !== "file:" ? window.location.origin.replace(/\/$/, "") : Es();
 }
 function Os(e) {
 	localStorage.setItem(Cs, e.replace(/\/$/, ""));
@@ -4176,12 +4172,7 @@ var zc = { class: "at-imlb__inner" }, Bc = ["src"], Vc = {
 					type: "url",
 					autocomplete: "off"
 				}, null, 512), [[wo, a.value]])]),
-				t[21] ||= q("p", { class: "at-hint" }, [
-					Y(" ComfyUI: "),
-					q("code", null, "http://127.0.0.1:8188"),
-					Y(" (API on this tab). AssetThingie app: "),
-					q("code", null, "http://127.0.0.1:8080")
-				], -1),
+				t[21] ||= q("p", { class: "at-hint" }, [Y(" Default: "), q("code", null, "http://127.0.0.1:8188")], -1),
 				q("button", {
 					type: "button",
 					class: "at-btn at-btn--ghost",
@@ -4275,7 +4266,7 @@ var zc = { class: "at-imlb__inner" }, Bc = ["src"], Vc = {
 			], 64)) : X("", !0)
 		]));
 	}
-}), [["__scopeId", "data-v-b9b0e54d"]]);
+}), [["__scopeId", "data-v-b121a9f2"]]);
 //#endregion
 //#region src/utils/downloadSpec.ts
 function Rl(e) {

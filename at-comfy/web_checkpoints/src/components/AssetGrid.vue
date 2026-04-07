@@ -4,11 +4,11 @@ import { storeToRefs } from "pinia";
 import AssetCard from "./AssetCard.vue";
 
 const store = useAssetsStore();
-const { items } = storeToRefs(store);
+const { items, gridColumnCount } = storeToRefs(store);
 </script>
 
 <template>
-  <div class="at-grid">
+  <div class="at-grid" :style="{ '--at-grid-cols': gridColumnCount }">
     <AssetCard v-for="it in items" :key="it.asset_id" :item="it" />
   </div>
 </template>
@@ -16,7 +16,7 @@ const { items } = storeToRefs(store);
 <style scoped>
 .at-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--at-grid-cols, 2), minmax(0, 1fr));
   gap: 0.5rem;
   padding: 0.5rem;
   align-content: start;

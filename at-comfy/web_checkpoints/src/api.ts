@@ -1,7 +1,7 @@
 import type { AssetDetail, AssetsResponse, FiltersResponse, SubfoldersResponse } from "./types";
 
 export const STORAGE_URL_KEY = "at_assetthingie_url";
-export const DEFAULT_BASE_URL = "http://127.0.0.1:8080";
+export const DEFAULT_BASE_URL = "http://127.0.0.1:8188";
 const FETCH_TIMEOUT_MS = 15_000;
 
 export function getBaseUrl(): string {
@@ -13,21 +13,15 @@ export function getBaseUrl(): string {
 }
 
 export function getApiPrefix(): string {
-  const base = getBaseUrl();
-  try {
-    const port = new URL(base).port;
-    if (port === "8188") return "/at";
-  } catch {
-    /* fallthrough */
-  }
-  return "/api/comfy";
+  return "/at";
 }
 
-/** Same-origin for ``/at`` on Comfy (avoid ``localhost`` vs ``127.0.0.1`` 403 from ComfyUI). */
+/**
+ * Origin for JSON and relative media URLs. ComfyUI rejects requests when ``Host`` and ``Origin``
+ * disagree (e.g. tab is ``localhost:8188`` but fetches use ``127.0.0.1:8188``), so we use the
+ * browser tab's origin when available.
+ */
 export function getRequestOrigin(): string {
-  if (getApiPrefix() !== "/at") {
-    return getBaseUrl();
-  }
   if (
     typeof window !== "undefined" &&
     window.location?.origin &&

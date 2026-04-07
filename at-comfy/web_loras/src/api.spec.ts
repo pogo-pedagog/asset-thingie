@@ -36,20 +36,9 @@ describe("api", () => {
     expect(getBaseUrl()).toBe("http://example.test:9999");
   });
 
-  it("fetchHealth requests /api/comfy/health on AssetThingie (8080)", async () => {
+  it("fetchHealth requests /at/health", async () => {
     const data = await fetchHealth();
     expect(data).toEqual({ ok: true });
-    expect(fetch).toHaveBeenCalledWith(
-      "http://127.0.0.1:8080/api/comfy/health",
-      expect.objectContaining({
-        headers: expect.objectContaining({ Accept: "application/json" }),
-      }),
-    );
-  });
-
-  it("fetchHealth uses tab origin + /at/health when base URL is Comfy (8188)", async () => {
-    setBaseUrl("http://127.0.0.1:8188");
-    await fetchHealth();
     expect(fetch).toHaveBeenCalledWith(
       expect.stringMatching(/\/at\/health$/),
       expect.objectContaining({
@@ -80,7 +69,7 @@ describe("api", () => {
     const d = await fetchAssetDetail(7);
     expect(d.asset_id).toBe(7);
     expect(fetch).toHaveBeenCalledWith(
-      "http://127.0.0.1:8080/api/comfy/assets/7",
+      expect.stringMatching(/\/at\/assets\/7$/),
       expect.any(Object),
     );
   });

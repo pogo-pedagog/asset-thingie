@@ -7,7 +7,13 @@ import logging
 try:
     from .at_checkpoint_loader import ATCheckpointLoader
     from .at_loraloader import ATLoraLoader
-except ImportError:
+except ImportError as exc:
+    _msg = str(exc)
+    _relative_without_parent = (
+        "no known parent package" in _msg or "relative import" in _msg
+    )
+    if not _relative_without_parent:
+        raise
     from at_checkpoint_loader import ATCheckpointLoader
     from at_loraloader import ATLoraLoader
 
