@@ -73,9 +73,11 @@ export const useBrowseStore = defineStore("at-browse", () => {
   const baseModels = ref<string[]>([]);
   const sort = ref<string>("Most Downloaded");
   const period = ref<string>("All Time");
-  /** When server config ``hide_nsfw`` is true, searches force SFW regardless. */
-  const nsfw = ref(false);
-  const hideNsfwLocked = ref(false);
+  /**
+   * Mirrors server ``hide_nsfw`` from config (SFW when true).
+   * Defaults to ``true`` until config is loaded so first paint matches clean-install policy.
+   */
+  const hideNsfwFromConfig = ref(true);
 
   const loading = ref(false);
   const fetching = ref(false);
@@ -114,7 +116,8 @@ export const useBrowseStore = defineStore("at-browse", () => {
       base_models: [...baseModels.value],
       sort: sort.value,
       period: period.value,
-      nsfw: hideNsfwLocked.value ? false : nsfw.value,
+      // NSFW-capable Civ.ai requests only when server has hide_nsfw off.
+      nsfw: !hideNsfwFromConfig.value,
     };
   }
 
@@ -239,7 +242,7 @@ export const useBrowseStore = defineStore("at-browse", () => {
     detailLoading.value = true;
     selected.value = null;
     try {
-      const raw = await api.browseModel(id, hideNsfwLocked.value ? false : nsfw.value);
+      const raw = await api.browseModel(id, !hideNsfwFromConfig.value);
       selected.value = raw as unknown as CivitaiModelDetail;
     } catch (e) {
       error.value = e instanceof Error ? e.message : "Detail failed";
@@ -275,8 +278,7 @@ export const useBrowseStore = defineStore("at-browse", () => {
     baseModels,
     sort,
     period,
-    nsfw,
-    hideNsfwLocked,
+    hideNsfwFromConfig,
     loading,
     fetching,
     error,

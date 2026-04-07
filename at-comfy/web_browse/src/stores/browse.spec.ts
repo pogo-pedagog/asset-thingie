@@ -142,6 +142,18 @@ describe("browse store", () => {
     expect(s.stoppedReason).toMatch(/same page/i);
   });
 
+  it("searchParams reflects hide_nsfw: nsfw false when hideNsfwFromConfig is true", () => {
+    const s = useBrowseStore();
+    s.hideNsfwFromConfig = true;
+    expect(s.searchParams().nsfw).toBe(false);
+  });
+
+  it("searchParams reflects hide_nsfw: nsfw true when hideNsfwFromConfig is false", () => {
+    const s = useBrowseStore();
+    s.hideNsfwFromConfig = false;
+    expect(s.searchParams().nsfw).toBe(true);
+  });
+
   it("toggleBatchId adds and removes", () => {
     const s = useBrowseStore();
     s.toggleBatchId(5);

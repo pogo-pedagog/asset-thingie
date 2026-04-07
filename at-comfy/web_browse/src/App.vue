@@ -69,8 +69,14 @@ watch([items, loading, fetching], () => {
   requestAnimationFrame(() => tryLoadMore());
 });
 
-onMounted(() => {
+onMounted(async () => {
   dl.startPolling();
+  try {
+    const cfg = await api.fetchConfig();
+    browse.hideNsfwFromConfig = Boolean(cfg.hide_nsfw);
+  } catch {
+    /* Keep default SFW (hideNsfwFromConfig === true) if config unreachable */
+  }
   void browse.search(true);
 });
 

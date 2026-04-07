@@ -22,8 +22,7 @@ async function loadAll(): Promise<void> {
     config.value = await api.fetchConfig();
     baseUrlInput.value = api.getBaseUrl();
     apiKeyInput.value = "";
-    browse.hideNsfwLocked = Boolean(config.value?.hide_nsfw);
-    if (browse.hideNsfwLocked) browse.nsfw = false;
+    browse.hideNsfwFromConfig = Boolean(config.value?.hide_nsfw);
     scanStatus.value = await api.fetchScanStatus();
     enrichStatus.value = await api.fetchEnrichStatus();
   } catch (e) {
@@ -55,8 +54,7 @@ async function saveConfig(): Promise<void> {
     if (apiKeyInput.value.trim()) body.civitai_api_key = apiKeyInput.value.trim();
     config.value = await api.putConfig(body);
     apiKeyInput.value = "";
-    browse.hideNsfwLocked = Boolean(config.value?.hide_nsfw);
-    if (browse.hideNsfwLocked) browse.nsfw = false;
+    browse.hideNsfwFromConfig = Boolean(config.value?.hide_nsfw);
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Save failed";
   } finally {
@@ -163,7 +161,7 @@ onUnmounted(() => {
 
       <label class="at-label at-label--row">
         <input v-model="config.hide_nsfw" type="checkbox" />
-        Hide NSFW from Civitai browse
+        Hide NSFW from Civitai (browse search, detail, and related API calls)
       </label>
 
       <div class="config-panel__actions">

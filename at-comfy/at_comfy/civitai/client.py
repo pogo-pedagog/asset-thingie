@@ -508,6 +508,8 @@ class CivitaiClient:
         return row if isinstance(row, dict) else None
 
     async def model_version_by_hash(self, sha256: str) -> dict[str, Any] | None:
+        """Resolve a version by SHA256. Civitai does not expose an ``nsfw`` query on this route;
+        follow with ``get_model(..., nsfw=…)`` (as enrichment does) to apply content policy."""
         url = f"{self.BASE_VERSION}/by-hash/{sha256}"
         try:
             return await self._request_json("GET", url)
@@ -516,8 +518,12 @@ class CivitaiClient:
                 return None
             raise
 
-    async def fetch_models_by_ids(self, ids: list[int]) -> list[CivitaiModel]:
-        """Fetch many models by id (batched). Preserves API item order where possible."""
+    async def fetch_models_by_ids(self, ids: list[int], *, nsfw: bool = False) -> list[CivitaiModel]:
+        """Fetch many models by id (batched). Preserves API item order where possible.
+
+        Pass ``nsfw=True`` only when policy allows NSFW content; default is SFW-aligned
+        (matches ``hide_nsfw`` default on clean installs).
+        """
         from urllib.parse import urlencode
 
         if not ids:
@@ -528,7 +534,7 @@ class CivitaiClient:
             chunk = ids[i : i + 100]
             q: list[tuple[str, str]] = [
                 ("limit", "100"),
-                ("nsfw", "true"),
+                ("nsfw", "true" if nsfw else "false"),
             ]
             for mid in chunk:
                 q.append(("ids", str(mid)))

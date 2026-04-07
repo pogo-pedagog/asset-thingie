@@ -3,15 +3,7 @@ import { ref } from "vue";
 import { storeToRefs } from "pinia";
 import { useBrowseStore } from "../stores/browse";
 import { BROWSE_BASE_MODELS, BROWSE_CONTENT_TYPES, BROWSE_PERIOD_OPTIONS, BROWSE_SORT_OPTIONS } from "../constants";
-const {
-  searchType,
-  contentTypes,
-  baseModels,
-  sort,
-  period,
-  nsfw,
-  hideNsfwLocked,
-} = storeToRefs(useBrowseStore());
+const { searchType, contentTypes, baseModels, sort, period } = storeToRefs(useBrowseStore());
 
 const expanded = ref(false);
 
@@ -88,12 +80,6 @@ function hasBaseModel(bm: string): boolean {
           <option v-for="o in BROWSE_PERIOD_OPTIONS" :key="o.value" :value="o.value">{{ o.label }}</option>
         </select>
       </label>
-
-      <label v-if="!hideNsfwLocked" class="browse-filters__row browse-filters__row--chk">
-        <input v-model="nsfw" type="checkbox" />
-        <span>Include NSFW</span>
-      </label>
-      <p v-else class="browse-filters__hint">NSFW hidden (server config).</p>
     </div>
   </div>
 </template>
@@ -128,11 +114,6 @@ function hasBaseModel(bm: string): boolean {
   flex-direction: column;
   gap: 0.2rem;
 }
-.browse-filters__row--chk {
-  flex-direction: row;
-  align-items: center;
-  gap: 0.5rem;
-}
 .browse-filters__section {
   display: flex;
   flex-direction: column;
@@ -152,11 +133,6 @@ function hasBaseModel(bm: string): boolean {
   align-items: center;
   gap: 0.25rem;
   cursor: pointer;
-}
-.browse-filters__hint {
-  margin: 0;
-  opacity: 0.75;
-  font-size: 0.75rem;
 }
 .at-input--sm {
   font-size: 0.8rem;
