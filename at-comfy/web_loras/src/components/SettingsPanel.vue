@@ -64,7 +64,7 @@ function save(): void {
       </label>
       <p class="at-settings__hint">
         AssetThingie URL. Default
-        <code>http://127.0.0.1:8080</code>
+        <code>http://127.0.0.1:8188</code>
       </p>
 
       <div class="at-settings__section">

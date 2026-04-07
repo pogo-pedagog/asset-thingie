@@ -38,14 +38,8 @@ describe("api", () => {
     expect(getBaseUrl()).toBe("http://example.test:8188");
   });
 
-  it("getApiPrefix is /at for Comfy port 8188", () => {
-    setBaseUrl("http://127.0.0.1:8188");
+  it("getApiPrefix is /at", () => {
     expect(getApiPrefix()).toBe("/at");
-  });
-
-  it("getApiPrefix is /api/comfy for other hosts (e.g. AssetThingie)", () => {
-    setBaseUrl("http://127.0.0.1:8080");
-    expect(getApiPrefix()).toBe("/api/comfy");
   });
 
   it("fetchHealth hits /at/health on default base", async () => {

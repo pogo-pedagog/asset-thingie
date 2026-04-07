@@ -112,8 +112,7 @@ onUnmounted(() => {
         <input v-model="baseUrlInput" class="at-input" type="url" autocomplete="off" />
       </label>
       <p class="at-hint">
-        ComfyUI: <code>http://127.0.0.1:8188</code> (API on this tab). AssetThingie app:
-        <code>http://127.0.0.1:8080</code>
+        Default: <code>http://127.0.0.1:8188</code>
       </p>
       <button type="button" class="at-btn at-btn--ghost" @click="applyServerUrl">Apply server URL</button>
 

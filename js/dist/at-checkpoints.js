@@ -3185,21 +3185,17 @@ function fs(e) {
 }
 //#endregion
 //#region src/api.ts
-var ps = "at_assetthingie_url", ms = "http://127.0.0.1:8080", hs = 15e3;
+var ps = "at_assetthingie_url", ms = "http://127.0.0.1:8188", hs = 15e3;
 function gs() {
 	if (typeof localStorage > "u") return ms;
-	let e = localStorage.getItem("at_assetthingie_url") || "http://127.0.0.1:8080";
+	let e = localStorage.getItem("at_assetthingie_url") || "http://127.0.0.1:8188";
 	return String(e).replace(/\/$/, "");
 }
 function _s() {
-	let e = gs();
-	try {
-		if (new URL(e).port === "8188") return "/at";
-	} catch {}
-	return "/api/comfy";
+	return "/at";
 }
 function vs() {
-	return _s() === "/at" && typeof window < "u" && window.location?.origin && window.location.protocol !== "file:" ? window.location.origin.replace(/\/$/, "") : gs();
+	return typeof window < "u" && window.location?.origin && window.location.protocol !== "file:" ? window.location.origin.replace(/\/$/, "") : gs();
 }
 function ys(e) {
 	localStorage.setItem(ps, e.replace(/\/$/, ""));
@@ -4062,7 +4058,7 @@ var Oc = ["checked"], kc = { class: "at-card__media" }, Ac = ["src"], jc = {
 				type: "url",
 				class: "at-settings__input"
 			}, null, 512), [[bo, V(t).baseUrlInput]])]),
-			d[5] ||= Y("p", { class: "at-settings__hint" }, [ra(" AssetThingie URL. Default "), Y("code", null, "http://127.0.0.1:8080")], -1),
+			d[5] ||= Y("p", { class: "at-settings__hint" }, [ra(" AssetThingie URL. Default "), Y("code", null, "http://127.0.0.1:8188")], -1),
 			Y("div", Zc, [
 				d[2] ||= Y("h3", { class: "at-settings__subtitle" }, "Library maintenance", -1),
 				d[3] ||= Y("p", { class: "at-settings__hint" }, " Remove database entries for model files that are no longer on disk, and delete their cached cover/example images. ", -1),
@@ -4094,7 +4090,7 @@ var Oc = ["checked"], kc = { class: "at-card__media" }, Ac = ["src"], jc = {
 			}, " Save & reconnect ")])
 		])]));
 	}
-}), [["__scopeId", "data-v-1bcc70bd"]]), cl = { class: "at-imlb__inner" }, ll = ["src"], ul = {
+}), [["__scopeId", "data-v-e3c285af"]]), cl = { class: "at-imlb__inner" }, ll = ["src"], ul = {
 	key: 0,
 	class: "at-imlb__meta"
 }, dl = /* @__PURE__ */ dc(/* @__PURE__ */ ir({

@@ -11,22 +11,16 @@ export function getBaseUrl(): string {
   return String(raw).replace(/\/$/, "");
 }
 
-/** ComfyUI default port uses the in-process ``/at`` API; standalone UI uses ``/api/comfy``. */
 export function getApiPrefix(): string {
-  const base = getBaseUrl();
-  try {
-    if (new URL(base).port === "8188") return "/at";
-  } catch {
-    /* fallthrough */
-  }
-  return "/api/comfy";
+  return "/at";
 }
 
-/** Use the tab origin for ``/at`` so ComfyUI Host/Origin checks pass. */
+/**
+ * Origin for JSON and relative media URLs. ComfyUI rejects requests when ``Host`` and ``Origin``
+ * disagree (e.g. tab is ``localhost:8188`` but fetches use ``127.0.0.1:8188``), so we use the
+ * browser tab's origin when available.
+ */
 export function getRequestOrigin(): string {
-  if (getApiPrefix() !== "/at") {
-    return getBaseUrl();
-  }
   if (
     typeof window !== "undefined" &&
     window.location?.origin &&
