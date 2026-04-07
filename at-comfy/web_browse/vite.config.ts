@@ -27,9 +27,9 @@ export default defineConfig(({ command }) => ({
     outDir: resolve(__dirname, "../../js/dist"),
     emptyOutDir: false,
     cssCodeSplit: false,
-    rollupOptions: {
+    rolldownOptions: {
       output: {
-        inlineDynamicImports: true,
+        codeSplitting: false,
       },
     },
   },

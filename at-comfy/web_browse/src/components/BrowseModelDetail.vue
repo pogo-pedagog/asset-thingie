@@ -62,7 +62,7 @@ const catsListId = computed(() => `at-browse-cats-${props.model.id}`);
 
 watch(
   () => [props.model.id, props.model.type] as const,
-  async ([_id, typ]) => {
+  async ([, typ]) => {
     categoryLoading.value = true;
     try {
       const fam = filterFamilyForModelType(typ);
