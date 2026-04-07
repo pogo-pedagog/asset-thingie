@@ -6,7 +6,16 @@ import type { AssetDetail, AssetItem, FiltersResponse, ViewMode } from "../types
 export type FilterSection = "" | "folder" | "tag" | "category";
 
 const VIEW_STORAGE_KEY = "at_loras_view_mode";
+const GRID_COLUMNS_STORAGE_KEY = "at_loras_grid_columns";
+const DEFAULT_GRID_COLUMNS = 2;
+const MIN_GRID_COLUMNS = 1;
+const MAX_GRID_COLUMNS = 20;
 const PAGE_SIZE = 40;
+
+function clampGridColumns(n: number): number {
+  if (!Number.isFinite(n)) return DEFAULT_GRID_COLUMNS;
+  return Math.min(MAX_GRID_COLUMNS, Math.max(MIN_GRID_COLUMNS, Math.round(n)));
+}
 
 export interface StackNodeOption {
   nodeId: number;
@@ -51,6 +60,7 @@ export const useAssetsStore = defineStore("at-loras-assets", () => {
   const tagFilterText = ref("");
 
   const viewMode = ref<ViewMode>("grid");
+  const gridColumnCount = ref(DEFAULT_GRID_COLUMNS);
   const settingsOpen = ref(false);
   const baseUrlInput = ref(api.getBaseUrl());
   const toast = ref<string | null>(null);
@@ -70,6 +80,8 @@ export const useAssetsStore = defineStore("at-loras-assets", () => {
   try {
     const v = localStorage.getItem(VIEW_STORAGE_KEY);
     if (v === "list" || v === "grid") viewMode.value = v;
+    const gc = localStorage.getItem(GRID_COLUMNS_STORAGE_KEY);
+    if (gc != null) gridColumnCount.value = clampGridColumns(parseInt(gc, 10));
   } catch {
     /* ignore */
   }
@@ -334,6 +346,16 @@ export const useAssetsStore = defineStore("at-loras-assets", () => {
     }
   }
 
+  function setGridColumnCount(n: number): void {
+    const c = clampGridColumns(n);
+    gridColumnCount.value = c;
+    try {
+      localStorage.setItem(GRID_COLUMNS_STORAGE_KEY, String(c));
+    } catch {
+      /* ignore */
+    }
+  }
+
   function showToast(msg: string): void {
     toast.value = msg;
     setTimeout(() => {
@@ -421,6 +443,7 @@ export const useAssetsStore = defineStore("at-loras-assets", () => {
     openFilterSection,
     tagFilterText,
     viewMode,
+    gridColumnCount,
     settingsOpen,
     baseUrlInput,
     toast,
@@ -456,6 +479,7 @@ export const useAssetsStore = defineStore("at-loras-assets", () => {
     loadMore,
     resetFilters,
     setViewMode,
+    setGridColumnCount,
     showToast,
     saveSettingsUrl,
     bootstrap,

@@ -67,6 +67,29 @@ function save(): void {
         <code>http://127.0.0.1:8188</code>
       </p>
 
+      <label class="at-settings__label at-settings__label--mt">
+        Grid columns (card view)
+        <div class="at-settings__slider-row">
+          <input
+            type="range"
+            class="at-settings__range"
+            min="1"
+            max="20"
+            step="1"
+            :value="store.gridColumnCount"
+            @input="
+              store.setGridColumnCount(Number(($event.target as HTMLInputElement).value))
+            "
+          />
+          <span class="at-settings__slider-value" aria-live="polite">{{
+            store.gridColumnCount
+          }}</span>
+        </div>
+      </label>
+      <p class="at-settings__hint">
+        1–20 columns when the toolbar is in grid mode. Very narrow sidebars still use one column.
+      </p>
+
       <div class="at-settings__section">
         <h3 class="at-settings__subtitle">Library maintenance</h3>
         <p class="at-settings__hint">
@@ -189,6 +212,29 @@ function save(): void {
   flex-direction: column;
   gap: 0.25rem;
   font-size: 0.8rem;
+}
+.at-settings__label--mt {
+  margin-top: 0.75rem;
+}
+.at-settings__slider-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-top: 0.2rem;
+}
+.at-settings__range {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 1.25rem;
+  accent-color: var(--p-primary-color, #6366f1);
+}
+.at-settings__slider-value {
+  flex: 0 0 auto;
+  min-width: 1.5rem;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+  text-align: right;
+  opacity: 0.95;
 }
 .at-settings__input {
   font: inherit;

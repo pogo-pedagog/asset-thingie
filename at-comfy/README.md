@@ -6,7 +6,7 @@ Python backend package for [Asset Thingie](../README.md). Provides the HTTP API,
 
 - Scans your Comfy model directories and indexes LoRAs and checkpoints in a local SQLite database.
 - Enriches entries with metadata from CivitAI (descriptions, tags, trigger words, preview images).
-- Adds three sidebar tabs (LoRAs, Checkpoints, Browse) built with Vue 3.
+- Adds three sidebar tabs (Browse, LoRAs, Checkpoints) built with Vue 3. Tab order is fixed in `js/at_sidebar_tabs.js` (single extension); Comfy does not order tabs by script filename.
 - Browse tab lets you search CivitAI, view model details, and download files directly into your Comfy model folders.
 - Download manager with pause/resume, parallel downloads, and progress tracking.
 
