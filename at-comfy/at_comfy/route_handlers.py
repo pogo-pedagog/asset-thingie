@@ -12,7 +12,7 @@ from aiohttp import web
 
 from at_comfy import scan_state
 from at_comfy.cache import cache_dir_safe_path, serve_cache_file
-from at_comfy.civitai.client import CivitaiClient
+from at_comfy.civitai.client import CivitaiClient, merge_models_list_pagination_url
 from at_comfy.civitai.models import (
     CivitaiImage,
     CivitaiModel,
@@ -45,6 +45,9 @@ from at_comfy.scanner import (
 from at_comfy.serial import asset_detail_dict, asset_row_to_dict
 
 logger = logging.getLogger(__name__)
+
+# Fixed API page size: Civitai returns different result sets at different limits; keep stable.
+BROWSE_CIVITAI_LIMIT = 75
 
 
 def _query_all(request: web.Request, key: str) -> list[str]:
@@ -281,32 +284,36 @@ def _client(cfg: ATComfyConfig) -> CivitaiClient:
     )
 
 
+def _browse_params_from_query(request: web.Request, cfg: ATComfyConfig) -> SearchParams:
+    ct = _query_all(request, "content_types") + _query_all(request, "content_type")
+    nsfw_q = (request.query.get("nsfw") or "").lower() in ("1", "true", "yes")
+    if cfg.hide_nsfw:
+        nsfw_effective = False
+    else:
+        nsfw_effective = nsfw_q
+    return SearchParams(
+        search_term=request.query.get("q") or "",
+        search_type=request.query.get("search_type") or "model_name",  # type: ignore[arg-type]
+        content_types=ct,
+        base_models=_query_all(request, "base_models"),
+        sort=request.query.get("sort") or "Most Downloaded",  # type: ignore[arg-type]
+        period=request.query.get("period") or "All Time",  # type: ignore[arg-type]
+        nsfw=nsfw_effective,
+        limit=BROWSE_CIVITAI_LIMIT,
+        hide_early_access=cfg.hide_early_access,
+    )
+
+
 async def handle_browse_search(request: web.Request) -> web.Response:
     cfg = load_config()
     client = _client(cfg)
     try:
-        ct = _query_all(request, "content_types") + _query_all(request, "content_type")
-        nsfw_q = (request.query.get("nsfw") or "").lower() in ("1", "true", "yes")
-        if cfg.hide_nsfw:
-            nsfw_effective = False
-        else:
-            nsfw_effective = nsfw_q
-        params = SearchParams(
-            search_term=request.query.get("q") or "",
-            search_type=request.query.get("search_type") or "model_name",  # type: ignore[arg-type]
-            content_types=ct,
-            base_models=_query_all(request, "base_models"),
-            sort=request.query.get("sort") or "Most Downloaded",  # type: ignore[arg-type]
-            period=request.query.get("period") or "All Time",  # type: ignore[arg-type]
-            nsfw=nsfw_effective,
-            limit=min(100, max(1, int(request.query.get("limit") or 20))),
-            hide_early_access=cfg.hide_early_access,
-        )
+        params = _browse_params_from_query(request, cfg)
     except Exception as e:
         return web.json_response({"error": str(e)}, status=400)
     try:
         page = await client.search(params)
-        body = _model_list_page_json(page)
+        body = _model_list_page_json(page, params)
     finally:
         await client.aclose()
     return web.json_response(body)
@@ -314,23 +321,35 @@ async def handle_browse_search(request: web.Request) -> web.Response:
 
 async def handle_browse_page(request: web.Request) -> web.Response:
     cfg = load_config()
-    url = urllib.parse.unquote(request.query.get("url") or "")
-    if not url:
+    raw_url = urllib.parse.unquote(request.query.get("url") or "")
+    if not raw_url:
         return web.json_response({"error": "missing url"}, status=400)
+    try:
+        params = _browse_params_from_query(request, cfg)
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=400)
+    fetch_url = merge_models_list_pagination_url(raw_url, params)
     client = _client(cfg)
     try:
-        page = await client.fetch_url(url)
-        body = _model_list_page_json(page)
+        page = await client.fetch_url(fetch_url)
+        body = _model_list_page_json(page, params)
     finally:
         await client.aclose()
     return web.json_response(body)
 
 
-def _model_list_page_json(page: ModelListPage) -> dict[str, Any]:
+def _model_list_page_json(page: ModelListPage, params: SearchParams | None = None) -> dict[str, Any]:
+    np = page.next_page
+    pp = page.prev_page
+    if params is not None:
+        if np:
+            np = merge_models_list_pagination_url(np, params)
+        if pp:
+            pp = merge_models_list_pagination_url(pp, params)
     return {
         "items": [m.model_dump(mode="json", by_alias=True) for m in page.items],
-        "next_page": page.next_page,
-        "prev_page": page.prev_page,
+        "next_page": np,
+        "prev_page": pp,
     }
 
 

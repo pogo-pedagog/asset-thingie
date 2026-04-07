@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from "vue";
+import { onMounted, onUnmounted, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { useBrowseStore } from "./stores/browse";
 import { useDownloadsStore } from "./stores/downloads";
@@ -16,6 +16,7 @@ const dl = useDownloadsStore();
 const {
   items,
   loading,
+  fetching,
   error,
   q,
   selected,
@@ -23,9 +24,50 @@ const {
   batchMode,
   batchIds,
   duplicateResolution,
-  nextPage,
+  hasMore,
+  stoppedReason,
 } = storeToRefs(browse);
 const { tasks, activeTab } = storeToRefs(dl);
+
+/** Scrollport for browse grid; IntersectionObserver is unreliable in nested overflow / iframe. */
+const scrollRoot = ref<HTMLElement | null>(null);
+const NEAR_BOTTOM_PX = 200;
+
+function isNearBottom(el: HTMLElement): boolean {
+  return el.scrollHeight - el.scrollTop - el.clientHeight <= NEAR_BOTTOM_PX;
+}
+
+function tryLoadMore(): void {
+  const root = scrollRoot.value;
+  if (!root || !hasMore.value) return;
+  if (loading.value) return;
+  if (!isNearBottom(root)) return;
+  void browse.loadMore();
+}
+
+let scrollRaf = 0;
+function onScrollRoot(): void {
+  if (scrollRaf) return;
+  scrollRaf = requestAnimationFrame(() => {
+    scrollRaf = 0;
+    tryLoadMore();
+  });
+}
+
+watch(
+  () => scrollRoot.value,
+  (root, prev) => {
+    if (prev) prev.removeEventListener("scroll", onScrollRoot);
+    if (!root) return;
+    root.addEventListener("scroll", onScrollRoot, { passive: true });
+    requestAnimationFrame(() => tryLoadMore());
+  },
+  { flush: "post", immediate: true },
+);
+
+watch([items, loading, fetching], () => {
+  requestAnimationFrame(() => tryLoadMore());
+});
 
 onMounted(() => {
   dl.startPolling();
@@ -33,6 +75,8 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  const root = scrollRoot.value;
+  if (root) root.removeEventListener("scroll", onScrollRoot);
   dl.stopPolling();
 });
 
@@ -196,12 +240,11 @@ async function onRemoveDl(id: string): Promise<void> {
         />
       </div>
 
-      <div class="at-browse-app__browse-scroll">
+      <div ref="scrollRoot" class="at-browse-app__browse-scroll">
         <BrowseResultGrid />
 
-        <button v-if="nextPage" type="button" class="at-btn at-btn--block" :disabled="loading" @click="browse.loadMore()">
-          Load more
-        </button>
+        <p v-if="fetching" class="at-muted">Loading more…</p>
+        <p v-if="stoppedReason && !fetching" class="at-muted">{{ stoppedReason }}</p>
       </div>
     </div>
 

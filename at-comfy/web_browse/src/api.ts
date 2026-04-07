@@ -61,7 +61,6 @@ export interface BrowseSearchParams {
   sort?: string;
   period?: string;
   nsfw?: boolean;
-  limit?: number;
 }
 
 export function buildBrowseSearchQuery(p: BrowseSearchParams): URLSearchParams {
@@ -77,7 +76,6 @@ export function buildBrowseSearchQuery(p: BrowseSearchParams): URLSearchParams {
   if (p.sort) sp.set("sort", p.sort);
   if (p.period) sp.set("period", p.period);
   if (p.nsfw) sp.set("nsfw", "true");
-  sp.set("limit", String(p.limit ?? 20));
   return sp;
 }
 
@@ -90,9 +88,10 @@ export async function browseSearch(params: BrowseSearchParams): Promise<CivitaiB
   return fetchJson(`${getApiPrefix()}/browse/search${q ? `?${q}` : ""}`);
 }
 
-export async function browsePage(urlParam: string): Promise<CivitaiBrowseResponse> {
-  const u = encodeURIComponent(urlParam);
-  return fetchJson(`${getApiPrefix()}/browse/page?url=${u}`);
+export async function browsePage(urlParam: string, params: BrowseSearchParams): Promise<CivitaiBrowseResponse> {
+  const sp = buildBrowseSearchQuery(params);
+  sp.set("url", urlParam);
+  return fetchJson(`${getApiPrefix()}/browse/page?${sp.toString()}`);
 }
 
 export async function browseModel(modelId: number, nsfw = false): Promise<Record<string, unknown>> {

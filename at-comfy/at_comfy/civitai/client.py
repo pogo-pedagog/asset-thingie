@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import random
 import re
 from datetime import UTC
 from typing import Any
@@ -22,6 +24,12 @@ logger = logging.getLogger(__name__)
 
 HTTP_TIMEOUT_DEFAULT = 60
 HTTP_CONNECT_TIMEOUT = 30
+
+# Transient Civitai / CDN failures (504 Gateway Timeout is common under load).
+_CIVITAI_RETRYABLE_STATUSES = frozenset({408, 429, 502, 503, 504})
+_CIVITAI_RETRY_MAX_ATTEMPTS = 4
+_CIVITAI_RETRY_BASE_DELAY_S = 1.0
+_CIVITAI_RETRY_MAX_DELAY_S = 32.0
 
 CIVITAI_MODEL_PAGE = "https://civitai.com/models"
 
@@ -244,9 +252,29 @@ class CivitaiAPIError(Exception):
         self.status_code = status_code
 
 
+def _retry_delay_after_response(attempt_index: int, response: httpx.Response | None) -> float:
+    """Backoff delay before the next attempt (seconds)."""
+    base = min(
+        _CIVITAI_RETRY_BASE_DELAY_S * (2**attempt_index),
+        _CIVITAI_RETRY_MAX_DELAY_S,
+    )
+    jitter = random.uniform(0, 0.35)
+    if response is not None and response.status_code == 429:
+        ra = (response.headers.get("Retry-After") or "").strip()
+        if ra.isdigit():
+            return max(float(ra), base + jitter)
+    return base + jitter
+
+
 def civitai_error_message_for_response(status_code: int, body_text: str) -> str:
     """Map HTTP error bodies to clearer UI copy (Civitai sometimes returns generic 500s)."""
-    default = f"Civitai API error: {status_code} {(body_text or '')[:200]}"
+    blob = body_text or ""
+    if status_code in (502, 503, 504) and "<html" in blob.lower()[:800]:
+        return (
+            f"Civitai temporarily unavailable ({status_code}); the request often succeeds "
+            "after a short wait — try again."
+        )
+    default = f"Civitai API error: {status_code} {blob[:200]}"
     raw = (body_text or "").strip()
     if not raw:
         return default
@@ -332,39 +360,78 @@ class CivitaiClient:
     async def _request_json(self, method: str, url: str, **kwargs: Any) -> dict[str, Any]:
         headers = {**self._default_headers(), **kwargs.pop("headers", {})}
         extra = {k: v for k, v in kwargs.items() if k in ("params", "content", "json")}
-        logger.debug(
-            "Civitai request %s %s headers=%s kwargs=%s",
-            method,
-            url,
-            _redact_headers(headers),
-            extra or {},
-        )
-        r = await self._client.request(method, url, headers=headers, **kwargs)
-        raw = r.text or ""
-        preview, truncated = _truncate_for_log(raw)
-        logger.debug(
-            "Civitai response status=%s request_url=%s final_url=%s resp_headers=%s body_chars=%s body=%r%s",
-            r.status_code,
-            url,
-            str(r.url),
-            _interesting_response_headers(r),
-            len(raw),
-            preview,
-            " [truncated]" if truncated else "",
-        )
-        if r.status_code >= 400:
-            raise CivitaiAPIError(
-                civitai_error_message_for_response(r.status_code, raw),
-                status_code=r.status_code,
+        for attempt in range(_CIVITAI_RETRY_MAX_ATTEMPTS):
+            logger.debug(
+                "Civitai request %s %s headers=%s kwargs=%s",
+                method,
+                url,
+                _redact_headers(headers),
+                extra or {},
             )
-        try:
-            return json.loads(raw) if raw.strip() else {}
-        except json.JSONDecodeError as e:
-            logger.debug("Civitai JSON decode error: %s", e)
-            raise CivitaiAPIError(
-                f"Civitai API returned non-JSON ({r.status_code}): {raw[:200]!r}",
-                status_code=r.status_code,
-            ) from e
+            try:
+                r = await self._client.request(method, url, headers=headers, **kwargs)
+            except httpx.RequestError as e:
+                if attempt + 1 >= _CIVITAI_RETRY_MAX_ATTEMPTS:
+                    raise CivitaiAPIError(
+                        f"Civitai request failed after {_CIVITAI_RETRY_MAX_ATTEMPTS} attempts: {e}",
+                        status_code=None,
+                    ) from e
+                delay = _retry_delay_after_response(attempt, None)
+                logger.warning(
+                    "Civitai %s %s transport error (attempt %s/%s): %s; retry in %.1fs",
+                    method,
+                    url,
+                    attempt + 1,
+                    _CIVITAI_RETRY_MAX_ATTEMPTS,
+                    e,
+                    delay,
+                )
+                await asyncio.sleep(delay)
+                continue
+
+            raw = r.text or ""
+            preview, truncated = _truncate_for_log(raw)
+            logger.debug(
+                "Civitai response status=%s request_url=%s final_url=%s resp_headers=%s body_chars=%s body=%r%s",
+                r.status_code,
+                url,
+                str(r.url),
+                _interesting_response_headers(r),
+                len(raw),
+                preview,
+                " [truncated]" if truncated else "",
+            )
+            if r.status_code >= 400:
+                if (
+                    r.status_code in _CIVITAI_RETRYABLE_STATUSES
+                    and attempt + 1 < _CIVITAI_RETRY_MAX_ATTEMPTS
+                ):
+                    delay = _retry_delay_after_response(attempt, r)
+                    logger.warning(
+                        "Civitai %s %s returned %s (attempt %s/%s); retry in %.1fs",
+                        method,
+                        url,
+                        r.status_code,
+                        attempt + 1,
+                        _CIVITAI_RETRY_MAX_ATTEMPTS,
+                        delay,
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+                raise CivitaiAPIError(
+                    civitai_error_message_for_response(r.status_code, raw),
+                    status_code=r.status_code,
+                )
+            try:
+                return json.loads(raw) if raw.strip() else {}
+            except json.JSONDecodeError as e:
+                logger.debug("Civitai JSON decode error: %s", e)
+                raise CivitaiAPIError(
+                    f"Civitai API returned non-JSON ({r.status_code}): {raw[:200]!r}",
+                    status_code=r.status_code,
+                ) from e
+
+        raise RuntimeError("unreachable: Civitai _request_json retry loop exhausted")
 
     def build_search_url(self, params: SearchParams) -> str:
         q = models_query_items_from_search_params(params)
