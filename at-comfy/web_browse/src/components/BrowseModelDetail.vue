@@ -1,0 +1,425 @@
+<script setup lang="ts">
+import { computed, ref, watch } from "vue";
+import { storeToRefs } from "pinia";
+import type { CivitaiFileSummary, CivitaiImageSummary, CivitaiModelDetail, CivitaiVersionSummary } from "../types";
+import { creatorNameFromItem, thumbUrl } from "../utils/civitaiDisplay";
+import { filterFamilyForModelType } from "../utils/filterFamilyForModelType";
+import ImageMetaLightbox from "@at-shared/ImageMetaLightbox.vue";
+import * as api from "../api";
+import { useBrowseStore } from "../stores/browse";
+
+const props = defineProps<{
+  model: CivitaiModelDetail;
+}>();
+
+const emit = defineEmits<{
+  close: [];
+  downloaded: [];
+  error: [msg: string];
+}>();
+
+const { category, duplicateResolution } = storeToRefs(useBrowseStore());
+
+const versionIndex = ref(0);
+const fileIndex = ref(0);
+const descExpanded = ref(false);
+const lightboxUrl = ref<string | null>(null);
+const lightboxMeta = ref<Record<string, unknown> | null>(null);
+
+const versions = computed(() => props.model.modelVersions ?? []);
+
+watch(
+  () => props.model.id,
+  () => {
+    versionIndex.value = 0;
+    fileIndex.value = 0;
+    descExpanded.value = false;
+    lightboxUrl.value = null;
+    lightboxMeta.value = null;
+  },
+);
+
+const currentVersion = computed((): CivitaiVersionSummary | null => {
+  const v = versions.value[versionIndex.value];
+  return v ?? null;
+});
+
+const currentFiles = computed((): CivitaiFileSummary[] => currentVersion.value?.files ?? []);
+
+watch(currentVersion, (v) => {
+  fileIndex.value = 0;
+  if (v?.files?.length) {
+    const prim = v.files.findIndex((f) => f.primary);
+    if (prim >= 0) fileIndex.value = prim;
+  }
+});
+
+const currentImages = computed((): CivitaiImageSummary[] => currentVersion.value?.images ?? []);
+
+const categoryOptions = ref<string[]>([]);
+const categoryLoading = ref(false);
+const catsListId = computed(() => `at-browse-cats-${props.model.id}`);
+
+watch(
+  () => [props.model.id, props.model.type] as const,
+  async ([_id, typ]) => {
+    categoryLoading.value = true;
+    try {
+      const fam = filterFamilyForModelType(typ);
+      const f = await api.fetchFilters(fam ? { family: fam } : {});
+      categoryOptions.value = f.categories ?? [];
+    } catch {
+      categoryOptions.value = [];
+    } finally {
+      categoryLoading.value = false;
+    }
+  },
+  { immediate: true },
+);
+
+const trainedWords = computed((): string[] => {
+  const w = currentVersion.value?.trainedWords;
+  return Array.isArray(w) ? w : [];
+});
+
+async function copyText(text: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    emit("error", "Copy failed");
+  }
+}
+
+function pickFileForDownload(): { versionId: number; fileId: number } | null {
+  const v = currentVersion.value;
+  const files = currentFiles.value;
+  if (!v || !files.length) return null;
+  const f = files[fileIndex.value] ?? files[0];
+  if (!f?.id) return null;
+  return { versionId: v.id, fileId: f.id };
+}
+
+async function downloadCurrent(): Promise<void> {
+  const spec = pickFileForDownload();
+  if (!spec) {
+    emit("error", "No file on this version");
+    return;
+  }
+  try {
+    await api.postDownload({
+      civitai_model_id: props.model.id,
+      version_id: spec.versionId,
+      file_id: spec.fileId,
+      category: category.value.trim() || "General",
+      duplicate_resolution: duplicateResolution.value,
+    });
+    emit("downloaded");
+  } catch (e) {
+    emit("error", e instanceof Error ? e.message : "Download failed");
+  }
+}
+
+async function downloadAllVersions(): Promise<void> {
+  const items: Record<string, unknown>[] = [];
+  for (const v of versions.value) {
+    const files = v.files ?? [];
+    if (!files.length) continue;
+    const primaryI = files.findIndex((f) => f.primary);
+    const f = files[primaryI >= 0 ? primaryI : 0];
+    if (!f?.id) continue;
+    items.push({
+      civitai_model_id: props.model.id,
+      version_id: v.id,
+      file_id: f.id,
+      category: category.value.trim() || "General",
+    });
+  }
+  if (!items.length) {
+    emit("error", "No downloadable files");
+    return;
+  }
+  try {
+    await api.postDownloadBatch(items, duplicateResolution.value);
+    emit("downloaded");
+  } catch (e) {
+    emit("error", e instanceof Error ? e.message : "Batch download failed");
+  }
+}
+
+function openLightbox(url: string, meta: Record<string, unknown> | null): void {
+  lightboxUrl.value = url;
+  lightboxMeta.value = meta;
+}
+
+function closeLightbox(): void {
+  lightboxUrl.value = null;
+  lightboxMeta.value = null;
+}
+
+const description = computed(() => props.model.description?.trim() || "");
+</script>
+
+<template>
+  <div class="model-detail">
+    <div class="model-detail__hdr">
+      <h3>{{ model.name }}</h3>
+      <button type="button" class="at-btn" @click="emit('close')">Close</button>
+    </div>
+
+    <p class="model-detail__sub">
+      <span class="pill">{{ model.type }}</span>
+      <span v-if="creatorNameFromItem(model)"> · {{ creatorNameFromItem(model) }}</span>
+      <span v-if="currentVersion?.baseModel"> · {{ currentVersion.baseModel }}</span>
+    </p>
+
+    <div v-if="versions.length" class="model-detail__controls">
+      <label class="at-label">
+        Version
+        <select v-model.number="versionIndex" class="at-input">
+          <option v-for="(v, i) in versions" :key="v.id" :value="i">
+            {{ v.name || `v${v.id}` }}
+          </option>
+        </select>
+      </label>
+      <label v-if="currentFiles.length > 1" class="at-label">
+        File
+        <select v-model.number="fileIndex" class="at-input">
+          <option v-for="(f, i) in currentFiles" :key="f.id" :value="i">
+            {{ f.name }} {{ f.primary ? "(primary)" : "" }}
+          </option>
+        </select>
+      </label>
+    </div>
+
+    <div v-if="description" class="model-detail__desc">
+      <div
+        class="model-detail__desc-inner"
+        :class="{ 'model-detail__desc-inner--collapsed': !descExpanded && description.length > 400 }"
+        v-html="description"
+      />
+      <button v-if="description.length > 400" type="button" class="at-btn at-btn--link" @click="descExpanded = !descExpanded">
+        {{ descExpanded ? "Show less" : "Show more" }}
+      </button>
+    </div>
+
+    <div v-if="trainedWords.length" class="model-detail__tw">
+      <span class="model-detail__tw-label">Trigger words</span>
+      <div class="model-detail__tw-row">
+        <code class="model-detail__tw-text">{{ trainedWords.join(", ") }}</code>
+        <button type="button" class="at-btn at-btn--sm" @click="copyText(trainedWords.join(', '))">Copy</button>
+      </div>
+    </div>
+
+    <div v-if="currentImages.length" class="model-detail__gallery">
+      <span class="model-detail__tw-label">Gallery</span>
+      <div class="model-detail__thumbs">
+        <button
+          v-for="(im, idx) in currentImages"
+          :key="idx"
+          type="button"
+          class="model-detail__thumb"
+          @click="openLightbox(im.url, (im.meta as Record<string, unknown>) ?? null)"
+        >
+          <img v-if="(im.type || 'image').toLowerCase() !== 'video'" :src="thumbUrl(im.url)" :alt="`Image ${idx}`" loading="lazy" />
+          <span v-else class="model-detail__vid">Video</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="model-detail__dl">
+      <label class="at-label">
+        Category folder
+        <span v-if="categoryLoading" class="model-detail__cats-hint">Loading folders…</span>
+        <input
+          v-model="category"
+          class="at-input model-detail__category-combo"
+          :list="catsListId"
+          placeholder="Pick from list or type a folder name (e.g. General)"
+          autocomplete="off"
+          aria-autocomplete="list"
+        />
+        <datalist :id="catsListId">
+          <option v-for="c in categoryOptions" :key="'dl-' + c" :value="c" />
+        </datalist>
+      </label>
+      <fieldset class="model-detail__dup">
+        <legend>Duplicate file</legend>
+        <label><input v-model="duplicateResolution" type="radio" value="skip" /> Skip if exists</label>
+        <label><input v-model="duplicateResolution" type="radio" value="replace" /> Replace</label>
+      </fieldset>
+      <div class="model-detail__dl-btns">
+        <button type="button" class="at-btn" @click="downloadCurrent">Download</button>
+        <button v-if="versions.length > 1" type="button" class="at-btn" @click="downloadAllVersions">Download all versions</button>
+      </div>
+    </div>
+
+    <ImageMetaLightbox :image-url="lightboxUrl" :meta="lightboxMeta" @close="closeLightbox" />
+  </div>
+</template>
+
+<style scoped>
+.model-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--fg-color, #888) 18%, transparent);
+  border-radius: 8px;
+  padding: 0.65rem;
+  max-height: min(85vh, 720px);
+  overflow: auto;
+}
+.model-detail__hdr {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+.model-detail__hdr h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+.model-detail__sub {
+  margin: 0;
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+.pill {
+  display: inline-block;
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--fg-color, #888) 12%, transparent);
+  font-size: 0.75rem;
+}
+.model-detail__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.at-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.75rem;
+  flex: 1;
+  min-width: 140px;
+}
+.at-input {
+  font: inherit;
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--fg-color, #888) 30%, transparent);
+  background: var(--comfy-input-bg, #1a1a1a);
+  color: inherit;
+}
+.at-btn {
+  font: inherit;
+  padding: 0.35rem 0.6rem;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--fg-color, #888) 30%, transparent);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.at-btn--sm {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.45rem;
+}
+.at-btn--link {
+  border: none;
+  background: none;
+  color: #6af;
+  padding: 0.15rem 0;
+  align-self: flex-start;
+}
+.model-detail__desc-inner {
+  font-size: 0.8rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.model-detail__desc-inner--collapsed {
+  max-height: 6rem;
+  overflow: hidden;
+  mask-image: linear-gradient(black 60%, transparent);
+}
+.model-detail__tw-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: block;
+  margin-bottom: 0.25rem;
+}
+.model-detail__tw-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+.model-detail__tw-text {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.4rem;
+  background: color-mix(in srgb, var(--fg-color, #888) 8%, transparent);
+  border-radius: 4px;
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.model-detail__thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.model-detail__thumb {
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--fg-color, #888) 20%, transparent);
+  border-radius: 4px;
+  overflow: hidden;
+  cursor: pointer;
+  background: transparent;
+  width: 64px;
+  height: 64px;
+}
+.model-detail__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.model-detail__vid {
+  font-size: 0.65rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+.model-detail__dup {
+  border: 1px solid color-mix(in srgb, var(--fg-color, #888) 15%, transparent);
+  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.model-detail__dup legend {
+  padding: 0 0.25rem;
+  font-size: 0.7rem;
+}
+.model-detail__dl > .at-label {
+  flex: none;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+.model-detail__cats-hint {
+  font-size: 0.65rem;
+  opacity: 0.75;
+  font-weight: normal;
+}
+.model-detail__category-combo {
+  width: 100%;
+  min-width: 0;
+}
+.model-detail__dl-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+</style>

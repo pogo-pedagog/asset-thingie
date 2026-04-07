@@ -1,0 +1,94 @@
+# --- Python bytecode ---
+__pycache__/
+*.py[codz]
+*$py.class
+
+# --- Native / binary extensions ---
+*.so
+*.dylib
+*.dll
+
+# --- Distribution / packaging ---
+.Python
+build/
+develop-eggs/
+dist/
+!js/dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+pip-wheel-metadata/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# --- Virtual environments ---
+.env
+.envrc
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# --- Test & coverage ---
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py.cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# --- Type checkers & linters ---
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+
+# --- Local app data (Comfy base path is often the repo during dev) ---
+at_comfy.db
+at_comfy.db-*
+at_comfy_config.json
+at_cache/
+
+# --- Node (extension tooling) ---
+node_modules/
+at-comfy/web_*/node_modules/
+
+# --- IDE & editors ---
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# --- Cursor (local AI / indexing) ---
+.cursorignore
+.cursorindexingignore
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Secrets ---
+.pypirc
+
+
+# reference code.
+ref/

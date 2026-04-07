@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install root package with dev deps
+        run: pip install -e ".[dev]"
+      - name: Install at-comfy with dev deps
+        run: pip install -e "./at-comfy[dev]"
+      - name: Ruff
+        run: ruff check .
+      - name: Tests
+        env:
+          PYTHONFAULTHANDLER: "1"
+        run: |
+          coverage erase
+          coverage run -m pytest -q
+          coverage report
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: |
+            at-comfy/web_loras/package-lock.json
+            at-comfy/web_checkpoints/package-lock.json
+            at-comfy/web_browse/package-lock.json
+      - name: Clean dist directory
+        run: |
+          rm -rf js/dist
+          mkdir -p js/dist
+      - name: web_loras — lint, types, tests, build
+        working-directory: at-comfy/web_loras
+        run: |
+          npm ci
+          npm run lint
+          npm run typecheck
+          npm run test
+          npm run build
+      - name: web_checkpoints — lint, types, tests, build
+        working-directory: at-comfy/web_checkpoints
+        run: |
+          npm ci
+          npm run lint
+          npm run typecheck
+          npm run test
+          npm run build
+      - name: web_browse — lint, types, tests, build
+        working-directory: at-comfy/web_browse
+        run: |
+          npm ci
+          npm run lint
+          npm run typecheck
+          npm run test
+          npm run build
+      - name: Check dist artifacts exist
+        run: |
+          test -f js/dist/at-loras.js
+          test -f js/dist/at-loras.css
+          test -f js/dist/at-checkpoints.js
+          test -f js/dist/at-checkpoints.css
+          test -f js/dist/at-browse.js
+          test -f js/dist/at-browse.css
