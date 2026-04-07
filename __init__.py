@@ -8,7 +8,11 @@ try:
     from .at_checkpoint_loader import ATCheckpointLoader
     from .at_loraloader import ATLoraLoader
 except ImportError as exc:
-    if "no known parent package" not in str(exc) and "relative import" not in str(exc):
+    _msg = str(exc)
+    _relative_without_parent = (
+        "no known parent package" in _msg or "relative import" in _msg
+    )
+    if not _relative_without_parent:
         raise
     from at_checkpoint_loader import ATCheckpointLoader
     from at_loraloader import ATLoraLoader
