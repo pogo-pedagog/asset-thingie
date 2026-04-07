@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import logging
 
-# Absolute imports: ComfyUI loads this file as a top-level module (not always as a package),
-# and pytest must be able to import this module from the repo root.
-from at_checkpoint_loader import ATCheckpointLoader
-from at_loraloader import ATLoraLoader
+try:
+    from .at_checkpoint_loader import ATCheckpointLoader
+    from .at_loraloader import ATLoraLoader
+except ImportError:
+    from at_checkpoint_loader import ATCheckpointLoader
+    from at_loraloader import ATLoraLoader
 
 NODE_CLASS_MAPPINGS = {
     "ATCheckpointLoader": ATCheckpointLoader,
