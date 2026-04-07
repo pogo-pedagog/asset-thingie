@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from "vue";
+import { onMounted, onUnmounted } from "vue";
 import { storeToRefs } from "pinia";
 import { useBrowseStore } from "./stores/browse";
 import { useDownloadsStore } from "./stores/downloads";
