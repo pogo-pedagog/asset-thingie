@@ -408,7 +408,10 @@ def _prepare_or_filter_models_page_items(
     hide_early_access: bool,
     now: datetime,
 ) -> list[dict]:
-    """Browse list/search uses ``hide_early_access=False`` (full rows); batch id fetch uses client flag like ``get_model``."""
+    """List/search: ``hide_early_access=False`` yields full rows.
+
+    Batch-by-id uses the client's flag, like ``get_model``.
+    """
     if not hide_early_access:
         return _prepare_browse_list_items(items, now=now)
     out: list[dict] = []
@@ -649,7 +652,7 @@ class CivitaiClient:
             ) from e
 
     async def get_model(self, model_id: int, *, nsfw: bool = False) -> CivitaiModel:
-        """Downloads / enqueue: non–early-access versions only when ``hide_early_access`` is on."""
+        """Downloads / enqueue: non-early-access versions only when ``hide_early_access`` is on."""
         raw = await self._fetch_model_raw_by_id(model_id, nsfw=nsfw)
         now = datetime.now(UTC)
         filtered = _filter_early_access_single_item(raw, hide=self._hide_early_access, now=now)
