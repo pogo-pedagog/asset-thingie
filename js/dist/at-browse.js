@@ -3910,10 +3910,10 @@ function Vc(e) {
 }
 //#endregion
 //#region ../web_shared/ImageMetaLightbox.vue?vue&type=script&setup=true&lang.ts
-var Hc = { class: "at-imlb__inner" }, Uc = ["src"], Wc = {
+var Hc = ["src"], Uc = {
 	key: 0,
 	class: "at-imlb__meta"
-}, Gc = /* @__PURE__ */ wc(/* @__PURE__ */ ar({
+}, Wc = /* @__PURE__ */ wc(/* @__PURE__ */ ar({
 	__name: "ImageMetaLightbox",
 	props: {
 		imageUrl: {},
@@ -3924,8 +3924,11 @@ var Hc = { class: "at-imlb__inner" }, Uc = ["src"], Wc = {
 		return (t, n) => (K(), Xi(er, { to: "body" }, [e.imageUrl ? (K(), q("div", {
 			key: 0,
 			class: "at-imlb",
+			onClick: n[2] ||= Po((e) => t.$emit("close"), ["self"])
+		}, [J("div", {
+			class: "at-imlb__inner",
 			onClick: n[1] ||= Po((e) => t.$emit("close"), ["self"])
-		}, [J("div", Hc, [
+		}, [
 			J("button", {
 				type: "button",
 				class: "at-imlb__x",
@@ -3934,32 +3937,32 @@ var Hc = { class: "at-imlb__inner" }, Uc = ["src"], Wc = {
 			J("img", {
 				src: e.imageUrl,
 				alt: "Preview"
-			}, null, 8, Uc),
-			e.meta && Object.keys(e.meta).length ? (K(), q("pre", Wc, j(JSON.stringify(e.meta, null, 2)), 1)) : X("", !0)
+			}, null, 8, Hc),
+			e.meta && Object.keys(e.meta).length ? (K(), q("pre", Uc, j(JSON.stringify(e.meta, null, 2)), 1)) : X("", !0)
 		])])) : X("", !0)]));
 	}
-}), [["__scopeId", "data-v-b698c59a"]]), Kc = { class: "model-detail" }, qc = { class: "model-detail__hdr" }, Jc = { class: "model-detail__sub" }, Yc = { class: "pill" }, Xc = { key: 0 }, Zc = { key: 1 }, Qc = {
+}), [["__scopeId", "data-v-a7eb6085"]]), Gc = { class: "model-detail" }, Kc = { class: "model-detail__hdr" }, qc = { class: "model-detail__sub" }, Jc = { class: "pill" }, Yc = { key: 0 }, Xc = { key: 1 }, Zc = {
 	key: 0,
 	class: "model-detail__controls"
-}, $c = { class: "at-label" }, el = ["value"], tl = {
+}, Qc = { class: "at-label" }, $c = ["value"], el = {
 	key: 0,
 	class: "at-label"
-}, nl = ["value"], rl = {
+}, tl = ["value"], nl = {
 	key: 1,
 	class: "model-detail__desc"
-}, il = ["innerHTML"], al = {
+}, rl = ["innerHTML"], il = {
 	key: 2,
 	class: "model-detail__tw"
-}, ol = { class: "model-detail__tw-row" }, sl = { class: "model-detail__tw-text" }, cl = {
+}, al = { class: "model-detail__tw-row" }, ol = { class: "model-detail__tw-text" }, sl = {
 	key: 3,
 	class: "model-detail__gallery"
-}, ll = { class: "model-detail__thumbs" }, ul = ["onClick"], dl = ["src", "alt"], fl = {
+}, cl = { class: "model-detail__thumbs" }, ll = ["onClick"], ul = ["src", "alt"], dl = {
 	key: 1,
 	class: "model-detail__vid"
-}, pl = { class: "model-detail__dl" }, ml = { class: "at-label" }, hl = {
+}, fl = { class: "model-detail__dl" }, pl = { class: "at-label" }, ml = {
 	key: 0,
 	class: "model-detail__cats-hint"
-}, gl = ["list"], _l = ["id"], vl = ["value"], yl = { class: "model-detail__dup" }, bl = { class: "model-detail__dl-btns" }, xl = /* @__PURE__ */ wc(/* @__PURE__ */ ar({
+}, hl = ["list"], gl = ["id"], _l = ["value"], vl = { class: "model-detail__dup" }, yl = { class: "model-detail__dl-btns" }, bl = /* @__PURE__ */ wc(/* @__PURE__ */ ar({
 	__name: "BrowseModelDetail",
 	props: { model: {} },
 	emits: [
@@ -4059,69 +4062,69 @@ var Hc = { class: "at-imlb__inner" }, Uc = ["src"], Wc = {
 			l.value = null, u.value = null;
 		}
 		let T = Aa(() => n.model.description?.trim() || "");
-		return (t, n) => (K(), q("div", Kc, [
-			J("div", qc, [J("h3", null, j(e.model.name), 1), J("button", {
+		return (t, n) => (K(), q("div", Gc, [
+			J("div", Kc, [J("h3", null, j(e.model.name), 1), J("button", {
 				type: "button",
 				class: "at-btn",
 				onClick: n[0] ||= (e) => r("close")
 			}, "Close")]),
-			J("p", Jc, [
-				J("span", Yc, j(e.model.type), 1),
-				z(Ec)(e.model) ? (K(), q("span", Xc, " · " + j(z(Ec)(e.model)), 1)) : X("", !0),
-				f.value?.baseModel ? (K(), q("span", Zc, " · " + j(f.value.baseModel), 1)) : X("", !0)
+			J("p", qc, [
+				J("span", Jc, j(e.model.type), 1),
+				z(Ec)(e.model) ? (K(), q("span", Yc, " · " + j(z(Ec)(e.model)), 1)) : X("", !0),
+				f.value?.baseModel ? (K(), q("span", Xc, " · " + j(f.value.baseModel), 1)) : X("", !0)
 			]),
-			d.value.length ? (K(), q("div", Qc, [J("label", $c, [n[8] ||= Y(" Version ", -1), V(J("select", {
+			d.value.length ? (K(), q("div", Zc, [J("label", Qc, [n[8] ||= Y(" Version ", -1), V(J("select", {
 				"onUpdate:modelValue": n[1] ||= (e) => o.value = e,
 				class: "at-input"
 			}, [(K(!0), q(W, null, Ar(d.value, (e, t) => (K(), q("option", {
 				key: e.id,
 				value: t
-			}, j(e.name || `v${e.id}`), 9, el))), 128))], 512), [[
+			}, j(e.name || `v${e.id}`), 9, $c))), 128))], 512), [[
 				Oo,
 				o.value,
 				void 0,
 				{ number: !0 }
-			]])]), p.value.length > 1 ? (K(), q("label", tl, [n[9] ||= Y(" File ", -1), V(J("select", {
+			]])]), p.value.length > 1 ? (K(), q("label", el, [n[9] ||= Y(" File ", -1), V(J("select", {
 				"onUpdate:modelValue": n[2] ||= (e) => s.value = e,
 				class: "at-input"
 			}, [(K(!0), q(W, null, Ar(p.value, (e, t) => (K(), q("option", {
 				key: e.id,
 				value: t
-			}, j(e.name) + " " + j(e.primary ? "(primary)" : ""), 9, nl))), 128))], 512), [[
+			}, j(e.name) + " " + j(e.primary ? "(primary)" : ""), 9, tl))), 128))], 512), [[
 				Oo,
 				s.value,
 				void 0,
 				{ number: !0 }
 			]])])) : X("", !0)])) : X("", !0),
-			T.value ? (K(), q("div", rl, [J("div", {
+			T.value ? (K(), q("div", nl, [J("div", {
 				class: A(["model-detail__desc-inner", { "model-detail__desc-inner--collapsed": !c.value && T.value.length > 400 }]),
 				innerHTML: T.value
-			}, null, 10, il), T.value.length > 400 ? (K(), q("button", {
+			}, null, 10, rl), T.value.length > 400 ? (K(), q("button", {
 				key: 0,
 				type: "button",
 				class: "at-btn at-btn--link",
 				onClick: n[3] ||= (e) => c.value = !c.value
 			}, j(c.value ? "Show less" : "Show more"), 1)) : X("", !0)])) : X("", !0),
-			v.value.length ? (K(), q("div", al, [n[10] ||= J("span", { class: "model-detail__tw-label" }, "Trigger words", -1), J("div", ol, [J("code", sl, j(v.value.join(", ")), 1), J("button", {
+			v.value.length ? (K(), q("div", il, [n[10] ||= J("span", { class: "model-detail__tw-label" }, "Trigger words", -1), J("div", al, [J("code", ol, j(v.value.join(", ")), 1), J("button", {
 				type: "button",
 				class: "at-btn at-btn--sm",
 				onClick: n[4] ||= (e) => y(v.value.join(", "))
 			}, "Copy")])])) : X("", !0),
-			m.value.length ? (K(), q("div", cl, [n[11] ||= J("span", { class: "model-detail__tw-label" }, "Gallery", -1), J("div", ll, [(K(!0), q(W, null, Ar(m.value, (e, t) => (K(), q("button", {
+			m.value.length ? (K(), q("div", sl, [n[11] ||= J("span", { class: "model-detail__tw-label" }, "Gallery", -1), J("div", cl, [(K(!0), q(W, null, Ar(m.value, (e, t) => (K(), q("button", {
 				key: t,
 				type: "button",
 				class: "model-detail__thumb",
 				onClick: (t) => C(e.url, e.meta ?? null)
-			}, [(e.type || "image").toLowerCase() === "video" ? (K(), q("span", fl, "Video")) : (K(), q("img", {
+			}, [(e.type || "image").toLowerCase() === "video" ? (K(), q("span", dl, "Video")) : (K(), q("img", {
 				key: 0,
 				src: z(Oc)(e.url),
 				alt: `Image ${t}`,
 				loading: "lazy"
-			}, null, 8, dl))], 8, ul))), 128))])])) : X("", !0),
-			J("div", pl, [
-				J("label", ml, [
+			}, null, 8, ul))], 8, ll))), 128))])])) : X("", !0),
+			J("div", fl, [
+				J("label", pl, [
 					n[12] ||= Y(" Category folder ", -1),
-					g.value ? (K(), q("span", hl, "Loading folders…")) : X("", !0),
+					g.value ? (K(), q("span", ml, "Loading folders…")) : X("", !0),
 					V(J("input", {
 						"onUpdate:modelValue": n[5] ||= (e) => /* @__PURE__ */ L(i) ? i.value = e : null,
 						class: "at-input model-detail__category-combo",
@@ -4129,13 +4132,13 @@ var Hc = { class: "at-imlb__inner" }, Uc = ["src"], Wc = {
 						placeholder: "Pick from list or type a folder name (e.g. General)",
 						autocomplete: "off",
 						"aria-autocomplete": "list"
-					}, null, 8, gl), [[wo, z(i)]]),
+					}, null, 8, hl), [[wo, z(i)]]),
 					J("datalist", { id: _.value }, [(K(!0), q(W, null, Ar(h.value, (e) => (K(), q("option", {
 						key: "dl-" + e,
 						value: e
-					}, null, 8, vl))), 128))], 8, _l)
+					}, null, 8, _l))), 128))], 8, gl)
 				]),
-				J("fieldset", yl, [
+				J("fieldset", vl, [
 					n[15] ||= J("legend", null, "Duplicate file", -1),
 					J("label", null, [V(J("input", {
 						"onUpdate:modelValue": n[6] ||= (e) => /* @__PURE__ */ L(a) ? a.value = e : null,
@@ -4148,7 +4151,7 @@ var Hc = { class: "at-imlb__inner" }, Uc = ["src"], Wc = {
 						value: "replace"
 					}, null, 512), [[Do, z(a)]]), n[14] ||= Y(" Replace", -1)])
 				]),
-				J("div", bl, [J("button", {
+				J("div", yl, [J("button", {
 					type: "button",
 					class: "at-btn",
 					onClick: x
@@ -4159,20 +4162,20 @@ var Hc = { class: "at-imlb__inner" }, Uc = ["src"], Wc = {
 					onClick: S
 				}, "Download all versions")) : X("", !0)])
 			]),
-			ta(Gc, {
+			ta(Wc, {
 				"image-url": l.value,
 				meta: u.value,
 				onClose: w
 			}, null, 8, ["image-url", "meta"])
 		]));
 	}
-}), [["__scopeId", "data-v-7ce530e9"]]), Sl = { class: "config-panel" }, Cl = {
+}), [["__scopeId", "data-v-7ce530e9"]]), xl = { class: "config-panel" }, Sl = {
 	key: 0,
 	class: "at-err"
-}, wl = {
+}, Cl = {
 	key: 1,
 	class: "at-muted"
-}, Tl = { class: "at-label" }, El = { class: "at-label" }, Dl = ["placeholder"], Ol = { class: "at-label at-label--row" }, kl = { class: "at-label" }, Al = { class: "at-label" }, jl = { class: "at-label" }, Ml = { class: "at-label" }, Nl = { class: "at-label at-label--row" }, Pl = { class: "at-label at-label--row" }, Fl = { class: "config-panel__actions" }, Il = ["disabled"], Ll = { class: "config-panel__status" }, Rl = { class: "config-panel__pre" }, zl = { class: "config-panel__pre" }, Bl = /* @__PURE__ */ wc(/* @__PURE__ */ ar({
+}, wl = { class: "at-label" }, Tl = { class: "at-label" }, El = ["placeholder"], Dl = { class: "at-label at-label--row" }, Ol = { class: "at-label" }, kl = { class: "at-label" }, Al = { class: "at-label" }, jl = { class: "at-label" }, Ml = { class: "at-label at-label--row" }, Nl = { class: "at-label at-label--row" }, Pl = { class: "config-panel__actions" }, Fl = ["disabled"], Il = { class: "config-panel__status" }, Ll = { class: "config-panel__pre" }, Rl = { class: "config-panel__pre" }, zl = /* @__PURE__ */ wc(/* @__PURE__ */ ar({
 	__name: "ConfigPanel",
 	setup(e) {
 		let t = ec(), n = /* @__PURE__ */ R(!1), r = /* @__PURE__ */ R(null), i = /* @__PURE__ */ R(null), a = /* @__PURE__ */ R(Es()), o = /* @__PURE__ */ R(""), s = /* @__PURE__ */ R(null), c = /* @__PURE__ */ R(null), l = null;
@@ -4233,11 +4236,11 @@ var Hc = { class: "at-imlb__inner" }, Uc = ["src"], Wc = {
 			u(), l = setInterval(() => void h(), 4e3);
 		}), wr(() => {
 			l && clearInterval(l);
-		}), (e, t) => (K(), q("div", Sl, [
-			r.value ? (K(), q("p", Cl, j(r.value), 1)) : X("", !0),
-			n.value && !i.value ? (K(), q("p", wl, "Loading…")) : X("", !0),
+		}), (e, t) => (K(), q("div", xl, [
+			r.value ? (K(), q("p", Sl, j(r.value), 1)) : X("", !0),
+			n.value && !i.value ? (K(), q("p", Cl, "Loading…")) : X("", !0),
 			i.value ? (K(), q(W, { key: 2 }, [
-				J("label", Tl, [t[9] ||= Y(" Server URL ", -1), V(J("input", {
+				J("label", wl, [t[9] ||= Y(" Server URL ", -1), V(J("input", {
 					"onUpdate:modelValue": t[0] ||= (e) => a.value = e,
 					class: "at-input",
 					type: "url",
@@ -4249,18 +4252,18 @@ var Hc = { class: "at-imlb__inner" }, Uc = ["src"], Wc = {
 					class: "at-btn at-btn--ghost",
 					onClick: d
 				}, "Apply server URL"),
-				J("label", El, [t[10] ||= Y(" Civitai API key ", -1), V(J("input", {
+				J("label", Tl, [t[10] ||= Y(" Civitai API key ", -1), V(J("input", {
 					"onUpdate:modelValue": t[1] ||= (e) => o.value = e,
 					class: "at-input",
 					type: "password",
 					autocomplete: "off",
 					placeholder: i.value.civitai_api_key_set ? "(unchanged — enter new key to replace)" : "Optional"
-				}, null, 8, Dl), [[wo, o.value]])]),
-				J("label", Ol, [V(J("input", {
+				}, null, 8, El), [[wo, o.value]])]),
+				J("label", Dl, [V(J("input", {
 					"onUpdate:modelValue": t[2] ||= (e) => i.value.scan_on_startup = e,
 					type: "checkbox"
 				}, null, 512), [[To, i.value.scan_on_startup]]), t[11] ||= Y(" Scan library on startup ", -1)]),
-				J("label", kl, [t[13] ||= Y(" Enrichment mode ", -1), V(J("select", {
+				J("label", Ol, [t[13] ||= Y(" Enrichment mode ", -1), V(J("select", {
 					"onUpdate:modelValue": t[3] ||= (e) => i.value.enrichment_mode = e,
 					class: "at-input"
 				}, [...t[12] ||= [
@@ -4268,7 +4271,7 @@ var Hc = { class: "at-imlb__inner" }, Uc = ["src"], Wc = {
 					J("option", { value: "background" }, "Background (after scan)", -1),
 					J("option", { value: "manual" }, "Manual only", -1)
 				]], 512), [[Oo, i.value.enrichment_mode]])]),
-				J("label", Al, [t[14] ||= Y(" Enrichment rate limit (ms) ", -1), V(J("input", {
+				J("label", kl, [t[14] ||= Y(" Enrichment rate limit (ms) ", -1), V(J("input", {
 					"onUpdate:modelValue": t[4] ||= (e) => i.value.enrichment_rate_limit_ms = e,
 					class: "at-input",
 					type: "number",
@@ -4280,7 +4283,7 @@ var Hc = { class: "at-imlb__inner" }, Uc = ["src"], Wc = {
 					void 0,
 					{ number: !0 }
 				]])]),
-				J("label", jl, [t[15] ||= Y(" Max parallel downloads ", -1), V(J("input", {
+				J("label", Al, [t[15] ||= Y(" Max parallel downloads ", -1), V(J("input", {
 					"onUpdate:modelValue": t[5] ||= (e) => i.value.max_parallel_downloads = e,
 					class: "at-input",
 					type: "number",
@@ -4292,26 +4295,26 @@ var Hc = { class: "at-imlb__inner" }, Uc = ["src"], Wc = {
 					void 0,
 					{ number: !0 }
 				]])]),
-				J("label", Ml, [t[16] ||= Y(" Download subpath template ", -1), V(J("input", {
+				J("label", jl, [t[16] ||= Y(" Download subpath template ", -1), V(J("input", {
 					"onUpdate:modelValue": t[6] ||= (e) => i.value.download_subpath_template = e,
 					class: "at-input",
 					placeholder: "{category}"
 				}, null, 512), [[wo, i.value.download_subpath_template]])]),
-				J("label", Nl, [V(J("input", {
+				J("label", Ml, [V(J("input", {
 					"onUpdate:modelValue": t[7] ||= (e) => i.value.hide_early_access = e,
 					type: "checkbox"
 				}, null, 512), [[To, i.value.hide_early_access]]), t[17] ||= Y(" Hide early-access versions (Civitai) ", -1)]),
-				J("label", Pl, [V(J("input", {
+				J("label", Nl, [V(J("input", {
 					"onUpdate:modelValue": t[8] ||= (e) => i.value.hide_nsfw = e,
 					type: "checkbox"
 				}, null, 512), [[To, i.value.hide_nsfw]]), t[18] ||= Y(" Hide NSFW from Civitai (browse search, detail, and related API calls) ", -1)]),
-				J("div", Fl, [
+				J("div", Pl, [
 					J("button", {
 						type: "button",
 						class: "at-btn",
 						disabled: n.value,
 						onClick: f
-					}, "Save settings", 8, Il),
+					}, "Save settings", 8, Fl),
 					J("button", {
 						type: "button",
 						class: "at-btn",
@@ -4328,11 +4331,11 @@ var Hc = { class: "at-imlb__inner" }, Uc = ["src"], Wc = {
 						onClick: u
 					}, "Reload")
 				]),
-				J("div", Ll, [
+				J("div", Il, [
 					t[19] ||= J("h4", null, "Scan", -1),
-					J("pre", Rl, j(JSON.stringify(s.value, null, 2)), 1),
+					J("pre", Ll, j(JSON.stringify(s.value, null, 2)), 1),
 					t[20] ||= J("h4", null, "Enrichment", -1),
-					J("pre", zl, j(JSON.stringify(c.value, null, 2)), 1)
+					J("pre", Rl, j(JSON.stringify(c.value, null, 2)), 1)
 				])
 			], 64)) : X("", !0)
 		]));
@@ -4340,7 +4343,7 @@ var Hc = { class: "at-imlb__inner" }, Uc = ["src"], Wc = {
 }), [["__scopeId", "data-v-4874b7c0"]]);
 //#endregion
 //#region src/utils/downloadSpec.ts
-function Vl(e) {
+function Bl(e) {
 	let t = e.modelVersions;
 	if (!t?.length) return null;
 	let n = t[0], r = n.files ?? [];
@@ -4354,48 +4357,48 @@ function Vl(e) {
 }
 //#endregion
 //#region src/App.vue?vue&type=script&setup=true&lang.ts
-var Hl = { class: "at-browse-app" }, Ul = { class: "at-browse-app__tabs" }, Wl = {
+var Vl = { class: "at-browse-app" }, Hl = { class: "at-browse-app__tabs" }, Ul = {
 	key: 0,
 	class: "at-browse-app__panel at-browse-app__panel--browse"
-}, Gl = { class: "at-browse-app__browse-chrome" }, Kl = { class: "at-browse-app__search" }, ql = ["disabled"], Jl = {
+}, Wl = { class: "at-browse-app__browse-chrome" }, Gl = { class: "at-browse-app__search" }, Kl = ["disabled"], ql = {
 	key: "browse-batch-bar",
 	class: "at-batch-bar"
-}, Yl = {
+}, Jl = {
 	key: "browse-search-error",
 	class: "at-err"
-}, Xl = {
+}, Yl = {
 	key: "browse-detail-panel",
 	class: "at-browse-app__detail-panel"
+}, Xl = {
+	key: 0,
+	class: "at-muted"
 }, Zl = {
 	key: 0,
 	class: "at-muted"
 }, Ql = {
-	key: 0,
+	key: 1,
 	class: "at-muted"
 }, $l = {
 	key: 1,
-	class: "at-muted"
-}, eu = {
-	key: 1,
 	class: "at-browse-app__panel"
-}, tu = {
+}, eu = {
 	key: 0,
 	class: "at-err"
-}, nu = { class: "at-dl-list" }, ru = { class: "at-dl__row" }, iu = ["src"], au = { class: "at-dl__main" }, ou = { class: "at-dl__title" }, su = {
+}, tu = { class: "at-dl-list" }, nu = { class: "at-dl__row" }, ru = ["src"], iu = { class: "at-dl__main" }, au = { class: "at-dl__title" }, ou = {
 	key: 0,
 	class: "at-dl__err"
-}, cu = {
+}, su = {
 	key: 1,
 	class: "at-dl__bar"
-}, lu = { class: "at-dl__actions" }, uu = ["onClick"], du = ["onClick"], fu = ["onClick"], pu = ["onClick"], mu = {
+}, cu = { class: "at-dl__actions" }, lu = ["onClick"], uu = ["onClick"], du = ["onClick"], fu = ["onClick"], pu = {
 	key: 2,
 	class: "at-browse-app__panel at-browse-app__panel--scroll"
-}, hu = 200, gu = /* @__PURE__ */ wc(/* @__PURE__ */ ar({
+}, mu = 200, hu = /* @__PURE__ */ wc(/* @__PURE__ */ ar({
 	__name: "App",
 	setup(e) {
 		let t = ec(), n = ac(), { items: r, loading: i, fetching: a, error: o, q: s, selected: c, detailLoading: l, batchMode: u, batchIds: d, duplicateResolution: f, hasMore: p, stoppedReason: m } = Ss(t), { tasks: h, activeTab: g } = Ss(n), _ = /* @__PURE__ */ R(null);
 		function v(e) {
-			return e.scrollHeight - e.scrollTop - e.clientHeight <= hu;
+			return e.scrollHeight - e.scrollTop - e.clientHeight <= mu;
 		}
 		function y() {
 			let e = _.value;
@@ -4445,7 +4448,7 @@ var Hl = { class: "at-browse-app" }, Ul = { class: "at-browse-app__tabs" }, Wl =
 			for (let n of d.value) {
 				let i = r.value.find((e) => e.id === n);
 				if (!i) continue;
-				let a = Vl(i);
+				let a = Bl(i);
 				a && e.push({
 					civitai_model_id: a.modelId,
 					version_id: a.versionId,
@@ -4509,7 +4512,7 @@ var Hl = { class: "at-browse-app" }, Ul = { class: "at-browse-app__tabs" }, Wl =
 				re(e instanceof Error ? e.message : "Remove failed");
 			}
 		}
-		return (e, r) => (K(), q("div", Hl, [J("header", Ul, [
+		return (e, r) => (K(), q("div", Vl, [J("header", Hl, [
 			J("button", {
 				type: "button",
 				class: A({ active: z(g) === "browse" }),
@@ -4527,9 +4530,9 @@ var Hl = { class: "at-browse-app" }, Ul = { class: "at-browse-app__tabs" }, Wl =
 				"aria-label": "Settings",
 				onClick: r[2] ||= (e) => C("settings")
 			}, " ⚙ ", 2)
-		]), z(g) === "browse" ? (K(), q("div", Wl, [
-			J("div", Gl, [
-				J("div", Kl, [
+		]), z(g) === "browse" ? (K(), q("div", Ul, [
+			J("div", Wl, [
+				J("div", Gl, [
 					V(J("input", {
 						"onUpdate:modelValue": r[3] ||= (e) => /* @__PURE__ */ L(s) ? s.value = e : null,
 						class: "at-input",
@@ -4541,7 +4544,7 @@ var Hl = { class: "at-browse-app" }, Ul = { class: "at-browse-app__tabs" }, Wl =
 						class: "at-btn",
 						disabled: z(i),
 						onClick: S
-					}, "Search", 8, ql),
+					}, "Search", 8, Kl),
 					J("button", {
 						type: "button",
 						class: A(["at-btn", { "at-btn--on": z(u) }]),
@@ -4549,7 +4552,7 @@ var Hl = { class: "at-browse-app" }, Ul = { class: "at-browse-app__tabs" }, Wl =
 					}, j(z(u) ? "Exit batch" : "Batch select"), 3)
 				]),
 				ta(Tc),
-				z(u) && z(d).size ? (K(), q("div", Jl, [
+				z(u) && z(d).size ? (K(), q("div", ql, [
 					J("span", null, j(z(d).size) + " selected", 1),
 					J("button", {
 						type: "button",
@@ -4562,9 +4565,9 @@ var Hl = { class: "at-browse-app" }, Ul = { class: "at-browse-app__tabs" }, Wl =
 						onClick: r[5] ||= (...e) => z(t).clearBatch && z(t).clearBatch(...e)
 					}, "Clear")
 				])) : X("", !0),
-				z(o) ? (K(), q("p", Yl, j(z(o)), 1)) : X("", !0)
+				z(o) ? (K(), q("p", Jl, j(z(o)), 1)) : X("", !0)
 			]),
-			z(l) || z(c) ? (K(), q("div", Xl, [z(l) ? (K(), q("p", Zl, "Loading model…")) : z(c) ? (K(), Xi(xl, {
+			z(l) || z(c) ? (K(), q("div", Yl, [z(l) ? (K(), q("p", Xl, "Loading model…")) : z(c) ? (K(), Xi(bl, {
 				key: 1,
 				model: z(c),
 				onClose: r[6] ||= (e) => z(t).closeDetail(),
@@ -4577,57 +4580,57 @@ var Hl = { class: "at-browse-app" }, Ul = { class: "at-browse-app__tabs" }, Wl =
 				class: "at-browse-app__browse-scroll"
 			}, [
 				ta(Bc),
-				z(a) ? (K(), q("p", Ql, "Loading more…")) : X("", !0),
-				z(m) && !z(a) ? (K(), q("p", $l, j(z(m)), 1)) : X("", !0)
+				z(a) ? (K(), q("p", Zl, "Loading more…")) : X("", !0),
+				z(m) && !z(a) ? (K(), q("p", Ql, j(z(m)), 1)) : X("", !0)
 			], 512)
-		])) : z(g) === "downloads" ? (K(), q("div", eu, [z(n).error ? (K(), q("p", tu, j(z(n).error), 1)) : X("", !0), J("ul", nu, [(K(!0), q(W, null, Ar(z(h), (e) => (K(), q("li", {
+		])) : z(g) === "downloads" ? (K(), q("div", $l, [z(n).error ? (K(), q("p", eu, j(z(n).error), 1)) : X("", !0), J("ul", tu, [(K(!0), q(W, null, Ar(z(h), (e) => (K(), q("li", {
 			key: e.id,
 			class: "at-dl"
-		}, [J("div", ru, [Js(e.cover_thumb_url) ? (K(), q("img", {
+		}, [J("div", nu, [Js(e.cover_thumb_url) ? (K(), q("img", {
 			key: 0,
 			class: "at-dl__thumb",
 			src: Js(e.cover_thumb_url),
 			alt: ""
-		}, null, 8, iu)) : X("", !0), J("div", au, [
-			J("div", ou, j(e.display_name || e.filename) + " — " + j(e.state), 1),
-			e.error_message ? (K(), q("div", su, j(e.error_message), 1)) : X("", !0),
-			e.total_bytes ? (K(), q("div", cu, [J("div", {
+		}, null, 8, ru)) : X("", !0), J("div", iu, [
+			J("div", au, j(e.display_name || e.filename) + " — " + j(e.state), 1),
+			e.error_message ? (K(), q("div", ou, j(e.error_message), 1)) : X("", !0),
+			e.total_bytes ? (K(), q("div", su, [J("div", {
 				class: "at-dl__fill",
 				style: le({ width: `${Math.min(100, Math.round(100 * e.bytes_done / (e.total_bytes || 1)))}%` })
 			}, null, 4)])) : X("", !0)
-		])]), J("div", lu, [
+		])]), J("div", cu, [
 			te(e.state) ? (K(), q("button", {
 				key: 0,
 				type: "button",
 				class: "at-btn at-btn--sm",
 				onClick: (t) => O(e.id)
-			}, "Cancel", 8, uu)) : X("", !0),
+			}, "Cancel", 8, lu)) : X("", !0),
 			E(e.state) ? (K(), q("button", {
 				key: 1,
 				type: "button",
 				class: "at-btn at-btn--sm",
 				onClick: (t) => ie(e.id)
-			}, "Pause", 8, du)) : X("", !0),
+			}, "Pause", 8, uu)) : X("", !0),
 			ne(e.state) ? (K(), q("button", {
 				key: 2,
 				type: "button",
 				class: "at-btn at-btn--sm",
 				onClick: (t) => ae(e.id)
-			}, "Retry", 8, fu)) : X("", !0),
+			}, "Retry", 8, du)) : X("", !0),
 			D(e.state) ? (K(), q("button", {
 				key: 3,
 				type: "button",
 				class: "at-btn at-btn--sm",
 				onClick: (t) => k(e.id)
-			}, "Remove", 8, pu)) : X("", !0)
-		])]))), 128))])])) : (K(), q("div", mu, [ta(Bl)]))]));
+			}, "Remove", 8, fu)) : X("", !0)
+		])]))), 128))])])) : (K(), q("div", pu, [ta(zl)]))]));
 	}
 }), [["__scopeId", "data-v-dc87358e"]]);
 //#endregion
 //#region src/main.ts
-function _u(e) {
-	let t = ss(), n = Bo(gu);
+function gu(e) {
+	let t = ss(), n = Bo(hu);
 	return n.use(t), n.mount(e), n;
 }
 //#endregion
-export { _u as mount };
+export { gu as mount };

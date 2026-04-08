@@ -13,7 +13,8 @@ defineEmits<{
 <template>
   <Teleport to="body">
     <div v-if="imageUrl" class="at-imlb" @click.self="$emit('close')">
-      <div class="at-imlb__inner">
+      <!-- @click.self: dismiss when hitting padding / flex gaps / dead area beside narrower image or meta -->
+      <div class="at-imlb__inner" @click.self="$emit('close')">
         <button type="button" class="at-imlb__x" @click="$emit('close')">×</button>
         <img :src="imageUrl" alt="Preview" />
         <pre v-if="meta && Object.keys(meta).length" class="at-imlb__meta">{{ JSON.stringify(meta, null, 2) }}</pre>
@@ -41,6 +42,7 @@ defineEmits<{
   overflow: auto;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 0.5rem;
 }
 .at-imlb__inner img {

@@ -4121,10 +4121,10 @@ var Nc = ["checked"], Pc = { class: "at-card__media" }, Fc = ["src"], Ic = {
 			}, " Save & reconnect ")])
 		])]));
 	}
-}), [["__scopeId", "data-v-1961c363"]]), gl = { class: "at-imlb__inner" }, _l = ["src"], vl = {
+}), [["__scopeId", "data-v-1961c363"]]), gl = ["src"], _l = {
 	key: 0,
 	class: "at-imlb__meta"
-}, yl = /* @__PURE__ */ gc(/* @__PURE__ */ or({
+}, vl = /* @__PURE__ */ gc(/* @__PURE__ */ or({
 	__name: "ImageMetaLightbox",
 	props: {
 		imageUrl: {},
@@ -4135,8 +4135,11 @@ var Nc = ["checked"], Pc = { class: "at-card__media" }, Fc = ["src"], Ic = {
 		return (t, n) => (K(), Xi(tr, { to: "body" }, [e.imageUrl ? (K(), q("div", {
 			key: 0,
 			class: "at-imlb",
+			onClick: n[2] ||= Eo((e) => t.$emit("close"), ["self"])
+		}, [J("div", {
+			class: "at-imlb__inner",
 			onClick: n[1] ||= Eo((e) => t.$emit("close"), ["self"])
-		}, [J("div", gl, [
+		}, [
 			J("button", {
 				type: "button",
 				class: "at-imlb__x",
@@ -4145,59 +4148,59 @@ var Nc = ["checked"], Pc = { class: "at-card__media" }, Fc = ["src"], Ic = {
 			J("img", {
 				src: e.imageUrl,
 				alt: "Preview"
-			}, null, 8, _l),
-			e.meta && Object.keys(e.meta).length ? (K(), q("pre", vl, A(JSON.stringify(e.meta, null, 2)), 1)) : Z("", !0)
+			}, null, 8, gl),
+			e.meta && Object.keys(e.meta).length ? (K(), q("pre", _l, A(JSON.stringify(e.meta, null, 2)), 1)) : Z("", !0)
 		])])) : Z("", !0)]));
 	}
-}), [["__scopeId", "data-v-b698c59a"]]), bl = { class: "at-detail__head" }, xl = {
+}), [["__scopeId", "data-v-a7eb6085"]]), yl = { class: "at-detail__head" }, bl = {
 	key: 0,
 	class: "at-detail__loading"
-}, Sl = {
+}, xl = {
 	key: 1,
 	class: "at-detail__scroll"
-}, Cl = {
+}, Sl = {
 	key: 0,
 	class: "at-detail__cover-wrap"
-}, wl = ["src"], Tl = { class: "at-detail__name" }, El = {
+}, Cl = ["src"], wl = { class: "at-detail__name" }, Tl = {
 	key: 1,
 	class: "at-detail__meta"
-}, Dl = {
+}, El = {
 	key: 2,
 	class: "at-detail__meta"
-}, Ol = { class: "at-detail__syntax" }, kl = { class: "at-detail__sec-head" }, Al = { class: "at-detail__code" }, jl = {
+}, Dl = { class: "at-detail__syntax" }, Ol = { class: "at-detail__sec-head" }, kl = { class: "at-detail__code" }, Al = {
 	key: 3,
 	class: "at-detail__section"
-}, Ml = { class: "at-detail__rec-list" }, Nl = {
+}, jl = { class: "at-detail__rec-list" }, Ml = {
 	key: 4,
 	class: "at-detail__meta"
-}, Pl = {
+}, Nl = {
 	key: 5,
 	class: "at-detail__section"
-}, Fl = { class: "at-detail__notes" }, Il = { class: "at-detail__section" }, Ll = { class: "at-detail__sec-head" }, Rl = {
+}, Pl = { class: "at-detail__notes" }, Fl = { class: "at-detail__section" }, Il = { class: "at-detail__sec-head" }, Ll = {
 	key: 0,
 	class: "at-detail__tw-list"
-}, zl = {
+}, Rl = {
 	key: 1,
 	class: "at-detail__tw-empty"
-}, Bl = {
+}, zl = {
 	key: 6,
 	class: "at-detail__section"
-}, Vl = { class: "at-detail__tags" }, Hl = {
+}, Bl = { class: "at-detail__tags" }, Vl = {
 	key: 7,
 	class: "at-detail__meta"
-}, Ul = ["href"], Wl = { class: "at-detail__row-actions" }, Gl = ["disabled"], Kl = {
+}, Hl = ["href"], Ul = { class: "at-detail__row-actions" }, Wl = ["disabled"], Gl = {
 	key: 9,
 	class: "at-detail__meta"
-}, ql = {
+}, Kl = {
 	key: 10,
 	class: "at-detail__section"
-}, Jl = ["innerHTML"], Yl = {
+}, ql = ["innerHTML"], Jl = {
 	key: 11,
 	class: "at-detail__section"
-}, Xl = { class: "at-detail__gallery" }, Zl = ["onClick"], Ql = ["src"], $l = {
+}, Yl = { class: "at-detail__gallery" }, Xl = ["onClick"], Zl = ["src"], Ql = {
 	key: 12,
 	class: "at-detail__section"
-}, eu = { class: "at-detail__path-line" }, tu = /* @__PURE__ */ gc(/* @__PURE__ */ or({
+}, $l = { class: "at-detail__path-line" }, eu = /* @__PURE__ */ gc(/* @__PURE__ */ or({
 	__name: "DetailPanel",
 	setup(e) {
 		let t = Rs(), { detail: n, detailLoading: r } = fs(t), i = $(() => n.value ? Ts(n.value.cover_url_full || n.value.cover_url) : null), a = $(() => {
@@ -4270,62 +4273,62 @@ var Nc = ["checked"], Pc = { class: "at-card__media" }, Fc = ["src"], Ic = {
 		}, [J("div", {
 			class: "at-detail__panel",
 			onClick: c[3] ||= Eo(() => {}, ["stop"])
-		}, [J("div", bl, [c[5] ||= J("h2", { class: "at-detail__h" }, "Details", -1), J("button", {
+		}, [J("div", yl, [c[5] ||= J("h2", { class: "at-detail__h" }, "Details", -1), J("button", {
 			type: "button",
 			class: "at-detail__close",
 			onClick: c[0] ||= (e) => R(t).closeDetail()
-		}, "×")]), R(r) ? (K(), q("div", xl, "Loading…")) : R(n) ? (K(), q("div", Sl, [
-			i.value ? (K(), q("div", Cl, [J("img", {
+		}, "×")]), R(r) ? (K(), q("div", bl, "Loading…")) : R(n) ? (K(), q("div", xl, [
+			i.value ? (K(), q("div", Sl, [J("img", {
 				src: i.value,
 				alt: "",
 				class: "at-detail__cover",
 				loading: "lazy"
-			}, null, 8, wl)])) : Z("", !0),
-			J("p", Tl, A(R(n).display_name || R(n).filename), 1),
-			R(n).base_model ? (K(), q("p", El, "Base: " + A(R(n).base_model), 1)) : Z("", !0),
-			R(n).default_strength != null && Number(R(n).default_strength) !== 1 ? (K(), q("p", Dl, " Default strength: " + A(R(n).default_strength), 1)) : Z("", !0),
-			J("div", Ol, [J("div", kl, [c[6] ||= J("span", { class: "at-detail__mini-label" }, "Comfy checkpoint", -1), R(n).comfy_checkpoint_name ? (K(), q("button", {
+			}, null, 8, Cl)])) : Z("", !0),
+			J("p", wl, A(R(n).display_name || R(n).filename), 1),
+			R(n).base_model ? (K(), q("p", Tl, "Base: " + A(R(n).base_model), 1)) : Z("", !0),
+			R(n).default_strength != null && Number(R(n).default_strength) !== 1 ? (K(), q("p", El, " Default strength: " + A(R(n).default_strength), 1)) : Z("", !0),
+			J("div", Dl, [J("div", Ol, [c[6] ||= J("span", { class: "at-detail__mini-label" }, "Comfy checkpoint", -1), R(n).comfy_checkpoint_name ? (K(), q("button", {
 				key: 0,
 				type: "button",
 				class: "at-detail__mini",
 				onClick: c[1] ||= (e) => d("checkpoint name", R(n).comfy_checkpoint_name)
-			}, " Copy ")) : Z("", !0)]), J("code", Al, A(R(n).comfy_checkpoint_name || "—"), 1)]),
-			l.value.length ? (K(), q("section", jl, [c[7] ||= J("div", { class: "at-detail__sec-title" }, "Checkpoint recommendations", -1), J("dl", Ml, [(K(!0), q(W, null, V(l.value, ([e, t]) => (K(), q(W, { key: e }, [J("dt", null, A(t), 1), J("dd", null, A(u(R(n).system_fields?.[e])), 1)], 64))), 128))])])) : Z("", !0),
-			R(n).category || R(n).subcategory ? (K(), q("p", Nl, A([R(n).category, R(n).subcategory].filter(Boolean).join(" / ")), 1)) : Z("", !0),
-			R(n).notes ? (K(), q("section", Pl, [c[8] ||= J("div", { class: "at-detail__sec-title" }, "Notes", -1), J("p", Fl, A(R(n).notes), 1)])) : Z("", !0),
-			J("section", Il, [J("div", Ll, [c[9] ||= J("span", { class: "at-detail__sec-title" }, "Triggers", -1), a.value.length ? (K(), q("button", {
+			}, " Copy ")) : Z("", !0)]), J("code", kl, A(R(n).comfy_checkpoint_name || "—"), 1)]),
+			l.value.length ? (K(), q("section", Al, [c[7] ||= J("div", { class: "at-detail__sec-title" }, "Checkpoint recommendations", -1), J("dl", jl, [(K(!0), q(W, null, V(l.value, ([e, t]) => (K(), q(W, { key: e }, [J("dt", null, A(t), 1), J("dd", null, A(u(R(n).system_fields?.[e])), 1)], 64))), 128))])])) : Z("", !0),
+			R(n).category || R(n).subcategory ? (K(), q("p", Ml, A([R(n).category, R(n).subcategory].filter(Boolean).join(" / ")), 1)) : Z("", !0),
+			R(n).notes ? (K(), q("section", Nl, [c[8] ||= J("div", { class: "at-detail__sec-title" }, "Notes", -1), J("p", Pl, A(R(n).notes), 1)])) : Z("", !0),
+			J("section", Fl, [J("div", Il, [c[9] ||= J("span", { class: "at-detail__sec-title" }, "Triggers", -1), a.value.length ? (K(), q("button", {
 				key: 0,
 				type: "button",
 				class: "at-detail__mini",
 				onClick: c[2] ||= (e) => d("triggers", o.value)
-			}, " Copy ")) : Z("", !0)]), a.value.length ? (K(), q("ul", Rl, [(K(!0), q(W, null, V(a.value, (e, t) => (K(), q("li", {
+			}, " Copy ")) : Z("", !0)]), a.value.length ? (K(), q("ul", Ll, [(K(!0), q(W, null, V(a.value, (e, t) => (K(), q("li", {
 				key: `${t}-${e}`,
 				class: "at-detail__tw-item"
-			}, [J("code", null, A(e), 1)]))), 128))])) : (K(), q("p", zl, "—"))]),
-			(R(n).tags ?? []).length ? (K(), q("section", Bl, [c[10] ||= J("div", { class: "at-detail__sec-title" }, "Tags", -1), J("div", Vl, [(K(!0), q(W, null, V(R(n).tags, (e) => (K(), q("span", {
+			}, [J("code", null, A(e), 1)]))), 128))])) : (K(), q("p", Rl, "—"))]),
+			(R(n).tags ?? []).length ? (K(), q("section", zl, [c[10] ||= J("div", { class: "at-detail__sec-title" }, "Tags", -1), J("div", Bl, [(K(!0), q(W, null, V(R(n).tags, (e) => (K(), q("span", {
 				key: e,
 				class: "at-detail__tag"
 			}, A(e), 1))), 128))])])) : Z("", !0),
-			R(n).source_creator_name ? (K(), q("p", Hl, " By " + A(R(n).source_creator_name), 1)) : Z("", !0),
+			R(n).source_creator_name ? (K(), q("p", Vl, " By " + A(R(n).source_creator_name), 1)) : Z("", !0),
 			R(n).source_url ? (K(), q("a", {
 				key: 8,
 				href: R(n).source_url,
 				target: "_blank",
 				rel: "noopener noreferrer",
 				class: "at-detail__link"
-			}, "Source", 8, Ul)) : Z("", !0),
-			J("div", Wl, [J("button", {
+			}, "Source", 8, Hl)) : Z("", !0),
+			J("div", Ul, [J("button", {
 				type: "button",
 				class: "at-detail__mini",
 				disabled: g.value,
 				onClick: _
-			}, A(g.value ? "Refreshing…" : "Refresh from Civitai"), 9, Gl)]),
-			R(n).usage_count || R(n).last_used_at ? (K(), q("p", Kl, [X(" Uses: " + A(R(n).usage_count), 1), R(n).last_used_at ? (K(), q(W, { key: 0 }, [X(" · " + A(R(n).last_used_at.replace("T", " ").slice(0, 19)), 1)], 64)) : Z("", !0)])) : Z("", !0),
-			R(n).description_html ? (K(), q("section", ql, [c[11] ||= J("div", { class: "at-detail__sec-title" }, "Description", -1), J("div", {
+			}, A(g.value ? "Refreshing…" : "Refresh from Civitai"), 9, Wl)]),
+			R(n).usage_count || R(n).last_used_at ? (K(), q("p", Gl, [X(" Uses: " + A(R(n).usage_count), 1), R(n).last_used_at ? (K(), q(W, { key: 0 }, [X(" · " + A(R(n).last_used_at.replace("T", " ").slice(0, 19)), 1)], 64)) : Z("", !0)])) : Z("", !0),
+			R(n).description_html ? (K(), q("section", Kl, [c[11] ||= J("div", { class: "at-detail__sec-title" }, "Description", -1), J("div", {
 				class: "at-detail__html",
 				innerHTML: R(n).description_html
-			}, null, 8, Jl)])) : Z("", !0),
-			R(n).example_media.length ? (K(), q("section", Yl, [c[12] ||= J("div", { class: "at-detail__sec-title" }, "Examples", -1), J("div", Xl, [(K(!0), q(W, null, V(R(n).example_media, (e) => (K(), q("div", {
+			}, null, 8, ql)])) : Z("", !0),
+			R(n).example_media.length ? (K(), q("section", Jl, [c[12] ||= J("div", { class: "at-detail__sec-title" }, "Examples", -1), J("div", Yl, [(K(!0), q(W, null, V(R(n).example_media, (e) => (K(), q("div", {
 				key: e.media_id,
 				class: "at-detail__ex-wrap"
 			}, [J("button", {
@@ -4338,29 +4341,29 @@ var Nc = ["checked"], Pc = { class: "at-card__media" }, Fc = ["src"], Ic = {
 				alt: "",
 				class: "at-detail__ex-img",
 				loading: "lazy"
-			}, null, 8, Ql)) : Z("", !0)], 8, Zl)]))), 128))])])) : Z("", !0),
-			s.value ? (K(), q("section", $l, [c[13] ||= J("div", { class: "at-detail__sec-title" }, "Path", -1), J("p", eu, A(s.value), 1)])) : Z("", !0)
-		])) : Z("", !0)]), Y(yl, {
+			}, null, 8, Zl)) : Z("", !0)], 8, Xl)]))), 128))])])) : Z("", !0),
+			s.value ? (K(), q("section", Ql, [c[13] ||= J("div", { class: "at-detail__sec-title" }, "Path", -1), J("p", $l, A(s.value), 1)])) : Z("", !0)
+		])) : Z("", !0)]), Y(vl, {
 			"image-url": f.value,
 			meta: p.value,
 			onClose: m
 		}, null, 8, ["image-url", "meta"])]));
 	}
-}), [["__scopeId", "data-v-1e25987e"]]), nu = { class: "at-app" }, ru = {
+}), [["__scopeId", "data-v-1e25987e"]]), tu = { class: "at-app" }, nu = {
 	key: 0,
 	class: "at-main-column"
-}, iu = { class: "at-empty at-empty--fill" }, au = {
+}, ru = { class: "at-empty at-empty--fill" }, iu = {
 	key: 1,
 	class: "at-main-column"
-}, ou = { class: "at-chrome" }, su = {
+}, au = { class: "at-chrome" }, ou = {
 	key: 0,
 	class: "at-empty at-empty--fill"
-}, cu = 160, lu = /* @__PURE__ */ gc(/* @__PURE__ */ or({
+}, su = 160, cu = /* @__PURE__ */ gc(/* @__PURE__ */ or({
 	__name: "App",
 	setup(e) {
 		let t = Rs(), { connected: n, items: r, loading: i, loadingMore: a, viewMode: o, settingsOpen: s, selectedAssetId: c } = fs(t), l = /* @__PURE__ */ L(null);
 		function u(e) {
-			return e.scrollHeight - e.scrollTop - e.clientHeight <= cu;
+			return e.scrollHeight - e.scrollTop - e.clientHeight <= su;
 		}
 		function d() {
 			let e = l.value;
@@ -4389,8 +4392,8 @@ var Nc = ["checked"], Pc = { class: "at-card__media" }, Fc = ["src"], Ic = {
 		}), Tr(() => {
 			let e = l.value;
 			e && e.removeEventListener("scroll", p);
-		}), (e, i) => (K(), q("div", nu, [
-			R(n) ? (K(), q("div", au, [J("div", ou, [Y(Tc), Y(jc)]), !R(t).loading && !R(r).length && !R(t).error ? (K(), q("div", su, [i[6] ||= J("p", null, "No checkpoints in the index for this filter.", -1), J("button", {
+		}), (e, i) => (K(), q("div", tu, [
+			R(n) ? (K(), q("div", iu, [J("div", au, [Y(Tc), Y(jc)]), !R(t).loading && !R(r).length && !R(t).error ? (K(), q("div", ou, [i[6] ||= J("p", null, "No checkpoints in the index for this filter.", -1), J("button", {
 				type: "button",
 				class: "at-empty__btn",
 				onClick: i[2] ||= (e) => R(t).resetFilters()
@@ -4399,10 +4402,10 @@ var Nc = ["checked"], Pc = { class: "at-card__media" }, Fc = ["src"], Ic = {
 				ref_key: "scrollRoot",
 				ref: l,
 				class: "at-scroll"
-			}, [R(o) === "grid" ? (K(), Xi(Xc, { key: 0 })) : (K(), Xi(Qc, { key: 1 }))], 512))])) : (K(), q("div", ru, [
+			}, [R(o) === "grid" ? (K(), Xi(Xc, { key: 0 })) : (K(), Xi(Qc, { key: 1 }))], 512))])) : (K(), q("div", nu, [
 				Y(Tc),
 				Y(jc),
-				J("div", iu, [
+				J("div", ru, [
 					J("p", null, [
 						i[3] ||= X("Could not connect to AssetThingie at ", -1),
 						J("code", null, A(R(t).baseUrlInput), 1),
@@ -4422,15 +4425,15 @@ var Nc = ["checked"], Pc = { class: "at-card__media" }, Fc = ["src"], Ic = {
 				])
 			])),
 			R(s) ? (K(), Xi(hl, { key: 2 })) : Z("", !0),
-			R(c) == null ? Z("", !0) : (K(), Xi(tu, { key: 3 }))
+			R(c) == null ? Z("", !0) : (K(), Xi(eu, { key: 3 }))
 		]));
 	}
 }), [["__scopeId", "data-v-b919f05e"]]);
 //#endregion
 //#region src/main.ts
-function uu(e) {
-	let t = Zo(), n = Ao(lu);
+function lu(e) {
+	let t = Zo(), n = Ao(cu);
 	return n.use(t), n.mount(e), n;
 }
 //#endregion
-export { uu as mount };
+export { lu as mount };
