@@ -31,6 +31,7 @@ async function loadAll(): Promise<void> {
     baseUrlInput.value = api.getBaseUrl();
     apiKeyInput.value = "";
     browse.hideNsfwFromConfig = Boolean(config.value?.hide_nsfw);
+    browse.hideEarlyAccessFromConfig = config.value?.hide_early_access !== false;
     scanStatus.value = await api.fetchScanStatus();
     enrichStatus.value = await api.fetchEnrichStatus();
   } catch (e) {
@@ -65,6 +66,7 @@ async function saveConfig(): Promise<void> {
     config.value = await api.putConfig(body);
     apiKeyInput.value = "";
     browse.hideNsfwFromConfig = Boolean(config.value?.hide_nsfw);
+    browse.hideEarlyAccessFromConfig = config.value?.hide_early_access !== false;
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Save failed";
   } finally {
@@ -166,7 +168,7 @@ onUnmounted(() => {
 
       <label class="at-label at-label--row">
         <input v-model="config.hide_early_access" type="checkbox" />
-        Hide early-access versions (Civitai)
+        Skip early-access downloads (Civitai)
       </label>
 
       <label class="at-label at-label--row">

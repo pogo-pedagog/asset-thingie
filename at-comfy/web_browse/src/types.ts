@@ -47,6 +47,8 @@ export interface CivitaiVersionSummary {
   trainedWords?: string[];
   files: CivitaiFileSummary[];
   images: CivitaiImageSummary[];
+  /** Present on model detail: Civitai early-access (not used in grid search items). */
+  isEarlyAccess?: boolean;
 }
 
 /** One row from ``/at/browse/search`` (full Civitai model JSON). */

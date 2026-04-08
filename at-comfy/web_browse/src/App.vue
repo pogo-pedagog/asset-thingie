@@ -74,6 +74,7 @@ onMounted(async () => {
   try {
     const cfg = await api.fetchConfig();
     browse.hideNsfwFromConfig = Boolean(cfg.hide_nsfw);
+    browse.hideEarlyAccessFromConfig = cfg.hide_early_access !== false;
   } catch {
     /* Keep default SFW (hideNsfwFromConfig === true) if config unreachable */
   }
@@ -109,7 +110,9 @@ async function batchDownloadSelected(): Promise<void> {
   for (const id of batchIds.value) {
     const it = items.value.find((x) => x.id === id);
     if (!it) continue;
-    const spec = pickDefaultDownloadSpec(it);
+    const spec = pickDefaultDownloadSpec(it, {
+      skipEarlyAccessDownloads: browse.hideEarlyAccessFromConfig,
+    });
     if (!spec) continue;
     payload.push({
       civitai_model_id: spec.modelId,

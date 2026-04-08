@@ -158,6 +158,11 @@ class CivitaiModelVersion(BaseModel):
     published_at: str | None = Field(default=None, alias="publishedAt")
     early_access_deadline: str | None = Field(default=None, alias="earlyAccessDeadline")
     availability: str | None = None
+    is_early_access: bool = Field(
+        default=False,
+        alias="isEarlyAccess",
+        description="Browse detail only: version is in Civitai early access.",
+    )
     description: str | None = None
     trained_words: list[str] = Field(default_factory=list, alias="trainedWords")
     images: list[CivitaiImage] = Field(default_factory=list)
@@ -204,6 +209,8 @@ class CivitaiModelVersion(BaseModel):
         for f in raw.get("files") or []:
             if isinstance(f, dict):
                 files.append(CivitaiFile.from_api(f))
+        ia_raw = raw.get("isEarlyAccess")
+        is_ea = bool(ia_raw) if isinstance(ia_raw, bool) else False
         return cls.model_validate(
             {
                 "id": raw.get("id"),
@@ -212,6 +219,7 @@ class CivitaiModelVersion(BaseModel):
                 "publishedAt": raw.get("publishedAt"),
                 "earlyAccessDeadline": raw.get("earlyAccessDeadline"),
                 "availability": raw.get("availability"),
+                "isEarlyAccess": is_ea,
                 "description": raw.get("description"),
                 "trainedWords": raw.get("trainedWords") or [],
                 "images": imgs,

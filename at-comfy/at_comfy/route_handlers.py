@@ -326,9 +326,9 @@ async def handle_browse_page(request: web.Request) -> web.Response:
         return web.json_response({"error": "missing url"}, status=400)
     try:
         params = _browse_params_from_query(request, cfg)
+        fetch_url = merge_models_list_pagination_url(raw_url, params)
     except Exception as e:
         return web.json_response({"error": str(e)}, status=400)
-    fetch_url = merge_models_list_pagination_url(raw_url, params)
     client = _client(cfg)
     try:
         page = await client.fetch_url(fetch_url)
@@ -425,6 +425,7 @@ async def _enrich_model_versions_with_image_meta(
     sem = asyncio.Semaphore(max_concurrent)
 
     async def one(v: CivitaiModelVersion) -> CivitaiModelVersion:
+        ea_flag = v.is_early_access
         async with sem:
             try:
                 vd = await client.get_version_detail(v.id, nsfw=nsfw)
@@ -436,10 +437,11 @@ async def _enrich_model_versions_with_image_meta(
                 )
                 return v
             try:
-                return await _hydrate_version_gallery_meta_from_images_api(client, vd, nsfw=nsfw)
+                out = await _hydrate_version_gallery_meta_from_images_api(client, vd, nsfw=nsfw)
             except Exception as e:
                 logger.debug("browse model image meta hydrate failed: %s", e)
-                return vd
+                out = vd
+            return out.model_copy(update={"is_early_access": ea_flag})
 
     enriched = await asyncio.gather(*(one(v) for v in m.model_versions))
     return m.model_copy(update={"model_versions": list(enriched)})
@@ -456,7 +458,7 @@ async def handle_browse_model(request: web.Request) -> web.Response:
         nsfw = (request.query.get("nsfw") or "").lower() in ("1", "true", "yes")
         if cfg.hide_nsfw:
             nsfw = False
-        m = await client.get_model(mid, nsfw=nsfw)
+        m = await client.get_model_detail_payload(mid, nsfw=nsfw)
         m = await _enrich_model_versions_with_image_meta(client, m, nsfw=nsfw)
         return web.json_response(m.model_dump(mode="json", by_alias=True))
     except Exception as e:

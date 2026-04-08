@@ -7,7 +7,7 @@ import json
 import logging
 import random
 import re
-from datetime import UTC
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
@@ -331,30 +331,147 @@ def civitai_error_message_for_response(status_code: int, body_text: str) -> str:
     return default
 
 
+def parse_civitai_early_access_deadline(deadline: str | None) -> datetime | None:
+    """Parse Civitai ``earlyAccessDeadline`` to aware UTC, or ``None`` if missing/unparseable."""
+    if deadline is None:
+        return None
+    s = str(deadline).strip()
+    if not s:
+        return None
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(s)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    else:
+        dt = dt.astimezone(UTC)
+    return dt
+
+
+def civitai_version_is_active_early_access(version: dict, *, now: datetime) -> bool:
+    """True when Civitai marks the version as in an early-access window.
+
+    When ``earlyAccessDeadline`` is present and parseable, it is authoritative (past deadline ⇒ public).
+    Otherwise Civitai may still set ``availability`` to ``EarlyAccess`` with a null deadline
+    (see e.g. public API model list payloads).
+    """
+    raw = version.get("earlyAccessDeadline")
+    if isinstance(raw, str):
+        dt = parse_civitai_early_access_deadline(raw)
+        if dt is not None:
+            return now <= dt
+    av = version.get("availability")
+    if isinstance(av, str) and av.strip().lower() == "earlyaccess":
+        return True
+    return False
+
+
+def _published_at_sort_key(version: dict) -> str:
+    p = version.get("publishedAt")
+    return p.strip() if isinstance(p, str) and p.strip() else ""
+
+
+def _raw_item_for_browse_detail(item: dict, *, now: datetime) -> dict | None:
+    """All file-bearing versions sorted by ``publishedAt`` desc, each with ``isEarlyAccess`` set."""
+    vers: list[dict] = []
+    for v in item.get("modelVersions") or []:
+        if not isinstance(v, dict):
+            continue
+        if not v.get("files"):
+            continue
+        ea = civitai_version_is_active_early_access(v, now=now)
+        vers.append({**v, "isEarlyAccess": ea})
+    if not vers:
+        return None
+    vers.sort(key=_published_at_sort_key, reverse=True)
+    return {**item, "modelVersions": vers}
+
+
+def _prepare_browse_list_items(items: list[dict], *, now: datetime) -> list[dict]:
+    """Annotate and sort every list row like browse detail (full ``modelVersions``, ``isEarlyAccess``)."""
+    out: list[dict] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        ann = _raw_item_for_browse_detail(item, now=now)
+        if ann:
+            out.append(ann)
+    return out
+
+
+def _prepare_or_filter_models_page_items(
+    items: list[dict],
+    *,
+    hide_early_access: bool,
+    now: datetime,
+) -> list[dict]:
+    """Browse list/search uses ``hide_early_access=False`` (full rows); batch id fetch uses client flag like ``get_model``."""
+    if not hide_early_access:
+        return _prepare_browse_list_items(items, now=now)
+    out: list[dict] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        one = _filter_early_access_single_item(item, hide=True, now=now)
+        if one:
+            out.append(one)
+    return out
+
+
+def _filter_early_access_single_item(item: dict, *, hide: bool, now: datetime) -> dict | None:
+    if not hide:
+        return item
+    visible: list[dict] = []
+    for v in item.get("modelVersions") or []:
+        if not isinstance(v, dict):
+            continue
+        if not v.get("files"):
+            continue
+        if civitai_version_is_active_early_access(v, now=now):
+            continue
+        visible.append(v)
+    if not visible:
+        return None
+    visible.sort(key=_published_at_sort_key, reverse=True)
+    return {**item, "modelVersions": visible}
+
+
+def _collect_excluded_early_access_variants(item: dict, now: datetime) -> list[dict[str, Any]]:
+    rows: list[tuple[str, dict[str, Any]]] = []
+    for v in item.get("modelVersions") or []:
+        if not isinstance(v, dict):
+            continue
+        if not v.get("files"):
+            continue
+        if not civitai_version_is_active_early_access(v, now=now):
+            continue
+        dl = v.get("earlyAccessDeadline")
+        name_raw = v.get("name")
+        name = name_raw.strip() if isinstance(name_raw, str) else ""
+        row: dict[str, Any] = {
+            "id": v.get("id"),
+            "name": name,
+            "earlyAccessDeadline": dl if isinstance(dl, str) else None,
+        }
+        rows.append((_published_at_sort_key(v), row))
+    rows.sort(key=lambda t: t[0], reverse=True)
+    return [t[1] for t in rows]
+
+
 def _filter_early_access(items: list[dict], hide: bool) -> list[dict]:
     if not hide:
         return items
-    from datetime import datetime
-
     now = datetime.now(UTC)
-    out = []
+    out: list[dict] = []
     for item in items:
-        versions = []
-        for v in item.get("modelVersions") or []:
-            if not v.get("files"):
-                continue
-            deadline = v.get("earlyAccessDeadline")
-            if deadline:
-                try:
-                    dt = datetime.strptime(deadline, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=UTC)
-                    if now <= dt:
-                        continue
-                except ValueError:
-                    pass
-            versions.append(v)
-        if versions:
-            new_item = {**item, "modelVersions": versions}
-            out.append(new_item)
+        if not isinstance(item, dict):
+            continue
+        filtered = _filter_early_access_single_item(item, hide=True, now=now)
+        if filtered:
+            out.append(filtered)
     return out
 
 
@@ -403,9 +520,9 @@ class CivitaiClient:
                 "Civitai request could not be completed (retry limit must be positive).",
                 status_code=None,
             )
-        # Each attempt ends in ``return``, ``raise``, or ``continue``. The last attempt never
-        # ``continue``s (transport and retryable HTTP errors raise instead), so with a
-        # positive limit the loop always finishes via ``return`` or ``raise``—never by falling through.
+        # Only entered when the limit is positive (see above). Each iteration ends in
+        # ``return``, ``raise``, or ``continue``; there is no normal exit from the loop body
+        # that skips all three (so the ``for`` does not fall through after the last iteration).
         for attempt in range(_CIVITAI_RETRY_MAX_ATTEMPTS):
             logger.debug(
                 "Civitai request %s %s headers=%s kwargs=%s",
@@ -484,18 +601,27 @@ class CivitaiClient:
     async def search(self, params: SearchParams) -> ModelListPage:
         url = self.build_search_url(params)
         data = await self._request_json("GET", url)
-        items_raw = _filter_early_access(data.get("items") or [], params.hide_early_access)
+        now = datetime.now(UTC)
+        items_raw = _prepare_or_filter_models_page_items(
+            data.get("items") or [],
+            hide_early_access=False,
+            now=now,
+        )
         items = _parse_model_items(items_raw)
         return ModelListPage(items=items, metadata=data.get("metadata") or {})
 
-    async def fetch_url(self, url: str, *, hide_early_access: bool | None = None) -> ModelListPage:
-        hide_ea = self._hide_early_access if hide_early_access is None else hide_early_access
+    async def fetch_url(self, url: str) -> ModelListPage:
         data = await self._request_json("GET", url)
-        items_raw = _filter_early_access(data.get("items") or [], hide_ea)
+        now = datetime.now(UTC)
+        items_raw = _prepare_or_filter_models_page_items(
+            data.get("items") or [],
+            hide_early_access=False,
+            now=now,
+        )
         items = _parse_model_items(items_raw)
         return ModelListPage(items=items, metadata=data.get("metadata") or {})
 
-    async def get_model(self, model_id: int, *, nsfw: bool = False) -> CivitaiModel:
+    async def _fetch_model_raw_by_id(self, model_id: int, *, nsfw: bool) -> dict[str, Any]:
         nsfw_q = "true" if nsfw else "false"
         url = f"{self.BASE_MODELS}?ids={int(model_id)}&nsfw={nsfw_q}"
         data = await self._request_json("GET", url)
@@ -503,14 +629,34 @@ class CivitaiClient:
         if not items:
             raise CivitaiAPIError(f"Model {model_id} not found", status_code=404)
         raw = items[0]
-        filtered = _filter_early_access([raw], self._hide_early_access)
-        if not filtered:
-            raise CivitaiAPIError("Model has no downloadable versions", status_code=404)
-        item = filtered[0]
-        if not item.get("modelVersions"):
+        if not isinstance(raw, dict):
+            raise CivitaiAPIError(f"Model {model_id} not found", status_code=404)
+        return raw
+
+    async def get_model_detail_payload(self, model_id: int, *, nsfw: bool = False) -> CivitaiModel:
+        """Browse detail: all file-bearing versions with ``isEarlyAccess`` on each (list endpoint)."""
+        raw = await self._fetch_model_raw_by_id(model_id, nsfw=nsfw)
+        now = datetime.now(UTC)
+        detail_raw = _raw_item_for_browse_detail(raw, now=now)
+        if not detail_raw or not detail_raw.get("modelVersions"):
             raise CivitaiAPIError("Model has no downloadable versions", status_code=404)
         try:
-            return CivitaiModel.from_api(item)
+            return CivitaiModel.from_api(detail_raw)
+        except ValidationError as e:
+            raise CivitaiAPIError(
+                f"Invalid model data from API: {e}",
+                status_code=502,
+            ) from e
+
+    async def get_model(self, model_id: int, *, nsfw: bool = False) -> CivitaiModel:
+        """Downloads / enqueue: non–early-access versions only when ``hide_early_access`` is on."""
+        raw = await self._fetch_model_raw_by_id(model_id, nsfw=nsfw)
+        now = datetime.now(UTC)
+        filtered = _filter_early_access_single_item(raw, hide=self._hide_early_access, now=now)
+        if not filtered or not filtered.get("modelVersions"):
+            raise CivitaiAPIError("Model has no downloadable versions", status_code=404)
+        try:
+            return CivitaiModel.from_api(filtered)
         except ValidationError as e:
             raise CivitaiAPIError(
                 f"Invalid model data from API: {e}",
@@ -584,7 +730,12 @@ class CivitaiClient:
                 q.append(("ids", str(mid)))
             url = f"{self.BASE_MODELS}?{urlencode(q, doseq=True)}"
             data = await self._request_json("GET", url)
-            items_raw = _filter_early_access(data.get("items") or [], self._hide_early_access)
+            now_batch = datetime.now(UTC)
+            items_raw = _prepare_or_filter_models_page_items(
+                data.get("items") or [],
+                hide_early_access=self._hide_early_access,
+                now=now_batch,
+            )
             for raw in items_raw:
                 try:
                     m = CivitaiModel.from_api(raw)
@@ -597,7 +748,12 @@ class CivitaiClient:
             next_url = (data.get("metadata") or {}).get("nextPage")
             while next_url:
                 data = await self._request_json("GET", next_url)
-                for raw in _filter_early_access(data.get("items") or [], self._hide_early_access):
+                now_page = datetime.now(UTC)
+                for raw in _prepare_or_filter_models_page_items(
+                    data.get("items") or [],
+                    hide_early_access=self._hide_early_access,
+                    now=now_page,
+                ):
                     try:
                         m = CivitaiModel.from_api(raw)
                     except ValidationError as e:

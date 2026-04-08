@@ -165,6 +165,10 @@ async def test_browse_model_enriches_versions_for_image_meta(tmp_comfy_base, mon
             assert mid == 7
             return CivitaiModel.from_api(model_raw)
 
+        async def get_model_detail_payload(self, mid: int, nsfw: bool = False):
+            assert mid == 7
+            return CivitaiModel.from_api(model_raw)
+
         async def get_version_detail(self, vid: int, nsfw: bool = False):
             assert vid == 99
             return CivitaiModelVersion.from_api(rich_ver)

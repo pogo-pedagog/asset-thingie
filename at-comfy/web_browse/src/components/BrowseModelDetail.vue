@@ -12,13 +12,24 @@ const props = defineProps<{
   model: CivitaiModelDetail;
 }>();
 
+function defaultVersionIndex(vers: CivitaiVersionSummary[], skipEa: boolean): number {
+  if (!skipEa) return 0;
+  const i = vers.findIndex((v) => !v.isEarlyAccess);
+  return i >= 0 ? i : 0;
+}
+
+function versionOptionLabel(v: CivitaiVersionSummary): string {
+  const base = v.name?.trim() || `v${v.id}`;
+  return v.isEarlyAccess ? `* ${base}` : base;
+}
+
 const emit = defineEmits<{
   close: [];
   downloaded: [];
   error: [msg: string];
 }>();
 
-const { category, duplicateResolution } = storeToRefs(useBrowseStore());
+const { category, duplicateResolution, hideEarlyAccessFromConfig } = storeToRefs(useBrowseStore());
 
 const versionIndex = ref(0);
 const fileIndex = ref(0);
@@ -31,10 +42,21 @@ const lightboxMeta = ref<Record<string, unknown> | null>(null);
 
 const versions = computed(() => props.model.modelVersions ?? []);
 
+const downloadableVersionCount = computed(() => {
+  const skipEa = hideEarlyAccessFromConfig.value;
+  return versions.value.filter((v) => {
+    if (skipEa && v.isEarlyAccess) return false;
+    return Boolean(v.files?.length);
+  }).length;
+});
+
 watch(
-  () => props.model.id,
+  () => [props.model.id, hideEarlyAccessFromConfig.value] as const,
   () => {
-    versionIndex.value = 0;
+    versionIndex.value = defaultVersionIndex(
+      props.model.modelVersions ?? [],
+      hideEarlyAccessFromConfig.value,
+    );
     fileIndex.value = 0;
     descExpanded.value = false;
     lightboxUrl.value = null;
@@ -49,6 +71,11 @@ const currentVersion = computed((): CivitaiVersionSummary | null => {
   const v = versions.value[versionIndex.value];
   return v ?? null;
 });
+
+const currentVersionIsEarlyAccess = computed(
+  () =>
+    hideEarlyAccessFromConfig.value && Boolean(currentVersion.value?.isEarlyAccess),
+);
 
 const currentFiles = computed((): CivitaiFileSummary[] => currentVersion.value?.files ?? []);
 
@@ -106,6 +133,7 @@ function pickFileForDownload(): { versionId: number; fileId: number } | null {
 }
 
 async function downloadCurrent(): Promise<void> {
+  if (currentVersionIsEarlyAccess.value) return;
   const spec = pickFileForDownload();
   if (!spec) {
     emit("error", "No file on this version");
@@ -127,7 +155,9 @@ async function downloadCurrent(): Promise<void> {
 
 async function downloadAllVersions(): Promise<void> {
   const items: Record<string, unknown>[] = [];
+  const skipEa = hideEarlyAccessFromConfig.value;
   for (const v of versions.value) {
+    if (skipEa && v.isEarlyAccess) continue;
     const files = v.files ?? [];
     if (!files.length) continue;
     const primaryI = files.findIndex((f) => f.primary);
@@ -213,7 +243,7 @@ const description = computed(() => props.model.description?.trim() || "");
         Version
         <select v-model.number="versionIndex" class="at-input">
           <option v-for="(v, i) in versions" :key="v.id" :value="i">
-            {{ v.name || `v${v.id}` }}
+            {{ versionOptionLabel(v) }}
           </option>
         </select>
       </label>
@@ -295,9 +325,21 @@ const description = computed(() => props.model.description?.trim() || "");
         <label><input v-model="duplicateResolution" type="radio" value="skip" /> Skip if exists</label>
         <label><input v-model="duplicateResolution" type="radio" value="replace" /> Replace</label>
       </fieldset>
+      <p v-if="currentVersionIsEarlyAccess" class="model-detail__ea-dl-msg" role="status">
+        Early-access version — not downloadable here.
+      </p>
       <div class="model-detail__dl-btns">
-        <button type="button" class="at-btn" @click="downloadCurrent">Download</button>
-        <button v-if="versions.length > 1" type="button" class="at-btn" @click="downloadAllVersions">Download all versions</button>
+        <button v-if="!currentVersionIsEarlyAccess" type="button" class="at-btn" @click="downloadCurrent">
+          Download
+        </button>
+        <button
+          v-if="downloadableVersionCount > 1"
+          type="button"
+          class="at-btn"
+          @click="downloadAllVersions"
+        >
+          Download all versions
+        </button>
       </div>
     </div>
 
@@ -344,6 +386,11 @@ const description = computed(() => props.model.description?.trim() || "");
   border-radius: 4px;
   background: color-mix(in srgb, var(--fg-color, #888) 12%, transparent);
   font-size: 0.75rem;
+}
+.model-detail__ea-dl-msg {
+  margin: 0;
+  font-size: 0.8rem;
+  opacity: 0.9;
 }
 .model-detail__controls {
   display: flex;

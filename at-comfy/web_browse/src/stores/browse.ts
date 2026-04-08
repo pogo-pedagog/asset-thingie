@@ -79,6 +79,12 @@ export const useBrowseStore = defineStore("at-browse", () => {
    */
   const hideNsfwFromConfig = ref(true);
 
+  /**
+   * Mirrors server ``hide_early_access`` (skip EA for batch default / server download resolution).
+   * Defaults to ``true`` until config loads.
+   */
+  const hideEarlyAccessFromConfig = ref(true);
+
   const loading = ref(false);
   const fetching = ref(false);
   const error = ref<string | null>(null);
@@ -279,6 +285,7 @@ export const useBrowseStore = defineStore("at-browse", () => {
     sort,
     period,
     hideNsfwFromConfig,
+    hideEarlyAccessFromConfig,
     loading,
     fetching,
     error,

@@ -259,13 +259,16 @@ def migrate(conn: sqlite3.Connection) -> None:
         logger.info("at_comfy: applying schema v1")
         _schema_v1(conn)
         _set_user_version(conn, 1)
+        conn.commit()
     v = _user_version(conn)
     if v < 2:
         logger.info("at_comfy: applying schema v2")
         _schema_v2(conn)
         _set_user_version(conn, 2)
+        conn.commit()
     v = _user_version(conn)
     if v < 3:
         logger.info("at_comfy: applying schema v3")
         _schema_v3(conn)
         _set_user_version(conn, 3)
+        conn.commit()
