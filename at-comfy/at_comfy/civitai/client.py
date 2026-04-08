@@ -190,6 +190,44 @@ def civitai_image_url_with_width(url: str, width: int) -> str:
     return f"{u}{sep}width={int(width)}"
 
 
+def civitai_image_strip_width_query(url: str) -> str:
+    """Remove ``width=`` query keys so CDN can serve the largest embedded variant."""
+    u = (url or "").strip()
+    if not u:
+        return u
+    if "?" not in u and "&" not in u:
+        return u
+    from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+
+    parsed = urlparse(u)
+    items = [(k, v) for k, v in parse_qsl(parsed.query, keep_blank_values=True) if k.lower() != "width"]
+    q = urlencode(items, doseq=True)
+    return urlunparse(parsed._replace(query=q))
+
+
+def civitai_image_original_fetch_url(url: str, *, natural_width: int | None = None) -> str:
+    """URL for fetching the Civitai-stored original upload (strips ``width`` query params).
+
+    CDN paths sometimes include ``/width=N/``. Rewriting that to ``/width={natural_width}/``
+    still often yields a **derivative** (e.g. transcoded JPEG). The ``/original=true/`` path
+    segment requests the **true uploaded file** (PNG with tEXt/zTXt metadata when the user
+    uploaded a PNG). Current API responses usually ship ``original=true`` already; this
+    branch keeps legacy ``/width=N/`` links aligned with that behavior.
+
+    When no path ``width=`` segment is present, falls back to :func:`civitai_image_display_url`
+    (``natural_width`` is only consulted on that path — typical ``original=true`` URLs are unchanged
+    aside from query stripping).
+    """
+    u = (url or "").strip()
+    if not u:
+        return u
+    if re.search(r"/width=\d+", u):
+        u = re.sub(r"/width=\d+", "/original=true", u, count=1)
+    else:
+        u = civitai_image_display_url(u, natural_width=natural_width)
+    return civitai_image_strip_width_query(u)
+
+
 def civitai_download_headers(
     *,
     api_key: str = "",

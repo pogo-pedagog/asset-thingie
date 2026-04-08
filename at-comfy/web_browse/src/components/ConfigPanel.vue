@@ -20,6 +20,14 @@ async function loadAll(): Promise<void> {
   error.value = null;
   try {
     config.value = await api.fetchConfig();
+    if (config.value) {
+      if (typeof config.value.download_example_videos !== "boolean") {
+        config.value.download_example_videos = false;
+      }
+      if (typeof config.value.generate_video_posters !== "boolean") {
+        config.value.generate_video_posters = true;
+      }
+    }
     baseUrlInput.value = api.getBaseUrl();
     apiKeyInput.value = "";
     browse.hideNsfwFromConfig = Boolean(config.value?.hide_nsfw);
@@ -50,6 +58,8 @@ async function saveConfig(): Promise<void> {
       download_subpath_template: config.value.download_subpath_template,
       hide_early_access: config.value.hide_early_access,
       hide_nsfw: config.value.hide_nsfw,
+      download_example_videos: config.value.download_example_videos,
+      generate_video_posters: config.value.generate_video_posters,
     };
     if (apiKeyInput.value.trim()) body.civitai_api_key = apiKeyInput.value.trim();
     config.value = await api.putConfig(body);
@@ -162,6 +172,16 @@ onUnmounted(() => {
       <label class="at-label at-label--row">
         <input v-model="config.hide_nsfw" type="checkbox" />
         Hide NSFW from Civitai (browse search, detail, and related API calls)
+      </label>
+
+      <label class="at-label at-label--row">
+        <input v-model="config.download_example_videos" type="checkbox" />
+        Download gallery video samples during enrichment (uses more disk; enables offline video in sidebars)
+      </label>
+
+      <label class="at-label at-label--row">
+        <input v-model="config.generate_video_posters" type="checkbox" />
+        Generate JPEG poster frames for video samples (uses ffmpeg when available; still images work without it)
       </label>
 
       <div class="config-panel__actions">

@@ -24,6 +24,9 @@ const versionIndex = ref(0);
 const fileIndex = ref(0);
 const descExpanded = ref(false);
 const lightboxUrl = ref<string | null>(null);
+const lightboxPlaybackUrl = ref<string | null>(null);
+const lightboxPosterUrl = ref<string | null>(null);
+const lightboxMediaType = ref<string | null>(null);
 const lightboxMeta = ref<Record<string, unknown> | null>(null);
 
 const versions = computed(() => props.model.modelVersions ?? []);
@@ -35,6 +38,9 @@ watch(
     fileIndex.value = 0;
     descExpanded.value = false;
     lightboxUrl.value = null;
+    lightboxPlaybackUrl.value = null;
+    lightboxPosterUrl.value = null;
+    lightboxMediaType.value = null;
     lightboxMeta.value = null;
   },
 );
@@ -146,13 +152,43 @@ async function downloadAllVersions(): Promise<void> {
   }
 }
 
-function openLightbox(url: string, meta: Record<string, unknown> | null): void {
-  lightboxUrl.value = url;
-  lightboxMeta.value = meta;
+function openLightbox(im: CivitaiImageSummary): void {
+  const t = (im.type || "image").toLowerCase();
+  lightboxMediaType.value = t;
+  if (t === "video") {
+    lightboxPlaybackUrl.value = im.url;
+    lightboxPosterUrl.value = null;
+    lightboxUrl.value = null;
+  } else {
+    lightboxPlaybackUrl.value = null;
+    lightboxPosterUrl.value = null;
+    lightboxUrl.value = thumbUrl(im.url);
+  }
+  const m = im.meta;
+  lightboxMeta.value =
+    m && typeof m === "object" && Object.keys(m as object).length
+      ? (m as Record<string, unknown>)
+      : null;
+}
+
+function playThumbPreview(e: MouseEvent): void {
+  const el = (e.currentTarget as HTMLElement | null)?.querySelector("video");
+  if (el instanceof HTMLVideoElement) void el.play().catch(() => {});
+}
+
+function stopThumbPreview(e: MouseEvent): void {
+  const el = (e.currentTarget as HTMLElement | null)?.querySelector("video");
+  if (el instanceof HTMLVideoElement) {
+    el.pause();
+    el.currentTime = 0;
+  }
 }
 
 function closeLightbox(): void {
   lightboxUrl.value = null;
+  lightboxPlaybackUrl.value = null;
+  lightboxPosterUrl.value = null;
+  lightboxMediaType.value = null;
   lightboxMeta.value = null;
 }
 
@@ -218,10 +254,22 @@ const description = computed(() => props.model.description?.trim() || "");
           :key="idx"
           type="button"
           class="model-detail__thumb"
-          @click="openLightbox(im.url, (im.meta as Record<string, unknown>) ?? null)"
+          @mouseenter="(im.type || 'image').toLowerCase() === 'video' ? playThumbPreview($event) : undefined"
+          @mouseleave="(im.type || 'image').toLowerCase() === 'video' ? stopThumbPreview($event) : undefined"
+          @click="openLightbox(im)"
         >
-          <img v-if="(im.type || 'image').toLowerCase() !== 'video'" :src="thumbUrl(im.url)" :alt="`Image ${idx}`" loading="lazy" />
-          <span v-else class="model-detail__vid">Video</span>
+          <template v-if="(im.type || 'image').toLowerCase() === 'video'">
+            <video
+              class="model-detail__thumb-vid"
+              :src="im.url"
+              muted
+              loop
+              playsinline
+              preload="metadata"
+            />
+            <span class="model-detail__vid">Video</span>
+          </template>
+          <img v-else :src="thumbUrl(im.url)" :alt="`Image ${idx}`" loading="lazy" />
         </button>
       </div>
     </div>
@@ -253,7 +301,14 @@ const description = computed(() => props.model.description?.trim() || "");
       </div>
     </div>
 
-    <ImageMetaLightbox :image-url="lightboxUrl" :meta="lightboxMeta" @close="closeLightbox" />
+    <ImageMetaLightbox
+      :image-url="lightboxUrl"
+      :playback-url="lightboxPlaybackUrl"
+      :poster-url="lightboxPosterUrl"
+      :media-type="lightboxMediaType"
+      :meta="lightboxMeta"
+      @close="closeLightbox"
+    />
   </div>
 </template>
 
@@ -368,6 +423,7 @@ const description = computed(() => props.model.description?.trim() || "");
   gap: 0.35rem;
 }
 .model-detail__thumb {
+  position: relative;
   padding: 0;
   border: 1px solid color-mix(in srgb, var(--fg-color, #888) 20%, transparent);
   border-radius: 4px;
@@ -377,17 +433,24 @@ const description = computed(() => props.model.description?.trim() || "");
   width: 64px;
   height: 64px;
 }
-.model-detail__thumb img {
+.model-detail__thumb img,
+.model-detail__thumb-vid {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
 .model-detail__vid {
+  position: absolute;
+  right: 0.25rem;
+  bottom: 0.25rem;
   font-size: 0.65rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
+  line-height: 1;
+  padding: 0.15rem 0.3rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  pointer-events: none;
 }
 .model-detail__dup {
   border: 1px solid color-mix(in srgb, var(--fg-color, #888) 15%, transparent);

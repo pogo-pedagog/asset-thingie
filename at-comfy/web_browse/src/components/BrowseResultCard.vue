@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { CivitaiBrowseItem } from "../types";
-import { coverUrlFromBrowseItem, creatorNameFromItem, thumbUrl } from "../utils/civitaiDisplay";
+import { computed } from "vue";
+import { coverMediaFromBrowseItem, creatorNameFromItem, thumbUrl } from "../utils/civitaiDisplay";
 
 const props = defineProps<{
   item: CivitaiBrowseItem;
@@ -38,24 +39,54 @@ function onCheckboxClick(e: MouseEvent): void {
   e.stopPropagation();
   emit("toggleBatch");
 }
+
+const coverMedia = computed(() => coverMediaFromBrowseItem(props.item));
+const coverIsVideo = computed(() => (coverMedia.value?.type || "image").toLowerCase() === "video");
+
+function playCoverPreview(e: MouseEvent): void {
+  const el = (e.currentTarget as HTMLElement | null)?.querySelector("video");
+  if (el instanceof HTMLVideoElement) void el.play().catch(() => {});
+}
+
+function stopCoverPreview(e: MouseEvent): void {
+  const el = (e.currentTarget as HTMLElement | null)?.querySelector("video");
+  if (el instanceof HTMLVideoElement) {
+    el.pause();
+    el.currentTime = 0;
+  }
+}
 </script>
 
 <template>
   <div
     class="result-card"
     :class="{ 'result-card--batch': batchMode, 'result-card--selected': batchSelected }"
+    @mouseenter="coverIsVideo ? playCoverPreview($event) : undefined"
+    @mouseleave="coverIsVideo ? stopCoverPreview($event) : undefined"
     @click="onCardClick"
   >
     <div v-if="batchMode" class="result-card__cb" @click.stop="onCheckboxClick">
       <input type="checkbox" :checked="batchSelected" tabindex="-1" readonly />
     </div>
     <div class="result-card__thumb">
-      <img
-        v-if="coverUrlFromBrowseItem(item)"
-        :src="thumbUrl(coverUrlFromBrowseItem(item)!)"
-        :alt="item.name"
-        loading="lazy"
-      />
+      <template v-if="coverMedia?.url">
+        <video
+          v-if="coverIsVideo"
+          class="result-card__thumb-video"
+          :src="coverMedia.url"
+          muted
+          loop
+          playsinline
+          preload="metadata"
+        />
+        <img
+          v-else
+          :src="thumbUrl(coverMedia.url)"
+          :alt="item.name"
+          loading="lazy"
+        />
+        <span v-if="coverIsVideo" class="result-card__video-badge">Video</span>
+      </template>
       <div v-else class="result-card__placeholder">No preview</div>
     </div>
     <div class="result-card__meta">
@@ -86,6 +117,7 @@ function onCheckboxClick(e: MouseEvent): void {
   padding-top: 0.2rem;
 }
 .result-card__thumb {
+  position: relative;
   width: 72px;
   height: 72px;
   flex-shrink: 0;
@@ -93,10 +125,24 @@ function onCheckboxClick(e: MouseEvent): void {
   overflow: hidden;
   background: color-mix(in srgb, var(--fg-color, #888) 10%, transparent);
 }
-.result-card__thumb img {
+.result-card__thumb img,
+.result-card__thumb-video {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
+}
+.result-card__video-badge {
+  position: absolute;
+  right: 0.2rem;
+  bottom: 0.2rem;
+  font-size: 0.6rem;
+  line-height: 1;
+  padding: 0.15rem 0.28rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  pointer-events: none;
 }
 .result-card__placeholder {
   font-size: 0.65rem;

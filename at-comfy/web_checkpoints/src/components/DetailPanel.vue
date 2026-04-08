@@ -10,8 +10,16 @@ import type { ExampleMediaItem } from "../types";
 const store = useAssetsStore();
 const { detail, detailLoading } = storeToRefs(store);
 
-const coverFull = computed(() =>
+const coverPoster = computed(() =>
   detail.value ? api.resolveCoverSrc(detail.value.cover_url_full || detail.value.cover_url) : null,
+);
+
+const coverPlayback = computed(() =>
+  detail.value ? api.resolveCoverSrc(detail.value.cover_playback_url) : null,
+);
+
+const coverIsVideo = computed(
+  () => (detail.value?.cover_media_type || "").toLowerCase() === "video" && Boolean(coverPlayback.value),
 );
 
 /** Normalized list; API/detail may omit or mistype `trigger_words`. */
@@ -76,17 +84,44 @@ async function copyField(label: string, text: string | null | undefined) {
 }
 
 const lightboxImageUrl = ref<string | null>(null);
+const lightboxPlaybackUrl = ref<string | null>(null);
+const lightboxPosterUrl = ref<string | null>(null);
+const lightboxMediaType = ref<string | null>(null);
 const lightboxMeta = ref<Record<string, unknown> | null>(null);
 
 function closeImageLightbox(): void {
   lightboxImageUrl.value = null;
+  lightboxPlaybackUrl.value = null;
+  lightboxPosterUrl.value = null;
+  lightboxMediaType.value = null;
   lightboxMeta.value = null;
 }
 
 function openExampleLightbox(ex: ExampleMediaItem): void {
-  const u = api.resolveCoverSrc(ex.url || ex.thumbnail_url);
-  if (!u) return;
-  lightboxImageUrl.value = u;
+  const mt = (ex.media_type || "image").toLowerCase();
+  const play = ex.playback_url ? api.resolveCoverSrc(ex.playback_url) : null;
+  const poster = api.resolveCoverSrc(ex.poster_url || ex.thumbnail_url);
+
+  if (mt === "video" && play) {
+    lightboxMediaType.value = "video";
+    lightboxPlaybackUrl.value = play;
+    lightboxPosterUrl.value = poster;
+    lightboxImageUrl.value = poster || play;
+  } else if (mt === "video") {
+    lightboxMediaType.value = "image";
+    lightboxPlaybackUrl.value = null;
+    lightboxPosterUrl.value = null;
+    const u = poster || api.resolveCoverSrc(ex.url || ex.thumbnail_url);
+    if (!u) return;
+    lightboxImageUrl.value = u;
+  } else {
+    lightboxPlaybackUrl.value = null;
+    lightboxPosterUrl.value = null;
+    const u = api.resolveCoverSrc(ex.url || ex.thumbnail_url);
+    if (!u) return;
+    lightboxImageUrl.value = u;
+  }
+
   const p = ex.generation_params;
   if (p && typeof p === "object" && Object.keys(p).length) {
     lightboxMeta.value = { ...(p as Record<string, unknown>) };
@@ -94,6 +129,32 @@ function openExampleLightbox(ex: ExampleMediaItem): void {
     lightboxMeta.value = { caption: ex.caption as string };
   } else {
     lightboxMeta.value = null;
+  }
+}
+
+function playGalleryPreview(e: MouseEvent): void {
+  const el = (e.currentTarget as HTMLElement | null)?.querySelector("video");
+  if (el instanceof HTMLVideoElement) void el.play().catch(() => {});
+}
+
+function stopGalleryPreview(e: MouseEvent): void {
+  const el = (e.currentTarget as HTMLElement | null)?.querySelector("video");
+  if (el instanceof HTMLVideoElement) {
+    el.pause();
+    el.currentTime = 0;
+  }
+}
+
+function onCoverEnter(e: MouseEvent): void {
+  const v = (e.currentTarget as HTMLElement | null)?.querySelector("video.at-detail__cover--vid");
+  if (v instanceof HTMLVideoElement) void v.play().catch(() => {});
+}
+
+function onCoverLeave(e: MouseEvent): void {
+  const v = (e.currentTarget as HTMLElement | null)?.querySelector("video.at-detail__cover--vid");
+  if (v instanceof HTMLVideoElement) {
+    v.pause();
+    v.currentTime = 0;
   }
 }
 
@@ -131,8 +192,36 @@ async function refreshFromCivitai(): Promise<void> {
       </div>
       <div v-if="detailLoading" class="at-detail__loading">Loading…</div>
       <div v-else-if="detail" class="at-detail__scroll">
-        <div v-if="coverFull" class="at-detail__cover-wrap">
-          <img :src="coverFull" alt="" class="at-detail__cover" loading="lazy" />
+        <div
+          v-if="coverPoster || coverIsVideo"
+          class="at-detail__cover-wrap"
+          @mouseenter="(e) => coverIsVideo && onCoverEnter(e)"
+          @mouseleave="(e) => coverIsVideo && onCoverLeave(e)"
+        >
+          <template v-if="coverIsVideo && coverPlayback">
+            <video
+              class="at-detail__cover at-detail__cover--vid"
+              :src="coverPlayback"
+              muted
+              loop
+              playsinline
+              preload="metadata"
+            />
+            <img
+              v-if="coverPoster"
+              :src="coverPoster"
+              alt=""
+              class="at-detail__cover at-detail__cover--freeze"
+              loading="lazy"
+            />
+          </template>
+          <img
+            v-else-if="coverPoster"
+            :src="coverPoster"
+            alt=""
+            class="at-detail__cover"
+            loading="lazy"
+          />
         </div>
         <p class="at-detail__name">
           {{ detail.display_name || detail.filename }}
@@ -241,10 +330,48 @@ async function refreshFromCivitai(): Promise<void> {
         <section v-if="detail.example_media.length" class="at-detail__section">
           <div class="at-detail__sec-title">Examples</div>
           <div class="at-detail__gallery">
-            <div v-for="ex in detail.example_media" :key="ex.media_id" class="at-detail__ex-wrap">
+            <div
+              v-for="ex in detail.example_media"
+              :key="ex.media_id"
+              class="at-detail__ex-wrap"
+              @mouseenter="
+                (ex.media_type || '').toLowerCase() === 'video' && ex.playback_url
+                  ? playGalleryPreview($event)
+                  : undefined
+              "
+              @mouseleave="
+                (ex.media_type || '').toLowerCase() === 'video' && ex.playback_url
+                  ? stopGalleryPreview($event)
+                  : undefined
+              "
+            >
               <button type="button" class="at-detail__ex" @click="openExampleLightbox(ex)">
+                <template v-if="(ex.media_type || '').toLowerCase() === 'video' && ex.playback_url">
+                  <video
+                    class="at-detail__ex-vid"
+                    :src="api.resolveCoverSrc(ex.playback_url) || ''"
+                    muted
+                    loop
+                    playsinline
+                    preload="metadata"
+                  />
+                  <img
+                    v-if="ex.thumbnail_url || ex.poster_url"
+                    :src="api.resolveCoverSrc(ex.thumbnail_url || ex.poster_url || ex.url) || ''"
+                    alt=""
+                    class="at-detail__ex-img at-detail__ex-img--freeze"
+                    loading="lazy"
+                  />
+                </template>
                 <img
-                  v-if="ex.thumbnail_url || ex.url"
+                  v-else-if="(ex.media_type || '').toLowerCase() === 'video'"
+                  :src="api.resolveCoverSrc(ex.thumbnail_url || ex.poster_url || ex.url) || ''"
+                  alt=""
+                  class="at-detail__ex-img"
+                  loading="lazy"
+                />
+                <img
+                  v-else-if="ex.thumbnail_url || ex.url"
                   :src="api.resolveCoverSrc(ex.thumbnail_url || ex.url) || ''"
                   alt=""
                   class="at-detail__ex-img"
@@ -260,7 +387,14 @@ async function refreshFromCivitai(): Promise<void> {
         </section>
       </div>
     </div>
-    <ImageMetaLightbox :image-url="lightboxImageUrl" :meta="lightboxMeta" @close="closeImageLightbox" />
+    <ImageMetaLightbox
+      :image-url="lightboxImageUrl"
+      :playback-url="lightboxPlaybackUrl"
+      :poster-url="lightboxPosterUrl"
+      :media-type="lightboxMediaType"
+      :meta="lightboxMeta"
+      @close="closeImageLightbox"
+    />
   </div>
 </template>
 
@@ -330,6 +464,7 @@ async function refreshFromCivitai(): Promise<void> {
   gap: 0.45rem;
 }
 .at-detail__cover-wrap {
+  position: relative;
   border-radius: 6px;
   overflow: hidden;
   max-height: 200px;
@@ -340,6 +475,25 @@ async function refreshFromCivitai(): Promise<void> {
   object-fit: contain;
   display: block;
   background: color-mix(in srgb, var(--fg-color, #888) 8%, transparent);
+}
+.at-detail__cover--vid {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-height: 200px;
+  object-fit: contain;
+  z-index: 0;
+  background: color-mix(in srgb, var(--fg-color, #888) 8%, transparent);
+}
+.at-detail__cover--freeze {
+  position: relative;
+  z-index: 1;
+  transition: opacity 0.15s ease;
+}
+.at-detail__cover-wrap:hover .at-detail__cover--freeze {
+  opacity: 0;
+  pointer-events: none;
 }
 .at-detail__name {
   margin: 0;
@@ -483,6 +637,7 @@ async function refreshFromCivitai(): Promise<void> {
   overflow: hidden;
 }
 .at-detail__ex {
+  position: relative;
   padding: 0;
   border: none;
   border-radius: 4px;
@@ -498,6 +653,23 @@ async function refreshFromCivitai(): Promise<void> {
   height: 100%;
   object-fit: cover;
   display: block;
+}
+.at-detail__ex-vid {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+}
+.at-detail__ex-wrap:hover .at-detail__ex-img--freeze {
+  opacity: 0;
+  pointer-events: none;
+}
+.at-detail__ex-img--freeze {
+  position: relative;
+  z-index: 1;
+  transition: opacity 0.15s ease;
 }
 .at-detail__html {
   font-size: 0.72rem;

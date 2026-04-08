@@ -238,12 +238,13 @@ def orphan_cache_bytes_for_asset_ids(asset_ids: set[int]) -> int:
     total = 0
     cache = cache_root()
     for aid in asset_ids:
-        cover = cache / "covers" / f"{aid}.jpg"
-        if cover.is_file():
-            try:
-                total += int(cover.stat().st_size)
-            except OSError:
-                pass
+        for name in (f"{aid}.jpg", f"{aid}.mp4"):
+            cover = cache / "covers" / name
+            if cover.is_file():
+                try:
+                    total += int(cover.stat().st_size)
+                except OSError:
+                    pass
         ex_dir = cache / "examples" / str(aid)
         if ex_dir.is_dir():
             try:
@@ -268,12 +269,13 @@ def clean_stale_assets() -> int:
         path = str(s["path"])
         conn.execute("DELETE FROM library_assets WHERE asset_id = ?", (aid,))
         conn.execute("DELETE FROM library_files WHERE path = ?", (path,))
-        cover = cache / "covers" / f"{aid}.jpg"
-        if cover.is_file():
-            try:
-                cover.unlink()
-            except OSError:
-                pass
+        for name in (f"{aid}.jpg", f"{aid}.mp4"):
+            cover = cache / "covers" / name
+            if cover.is_file():
+                try:
+                    cover.unlink()
+                except OSError:
+                    pass
         ex_dir = cache / "examples" / str(aid)
         if ex_dir.is_dir():
             shutil.rmtree(ex_dir, ignore_errors=True)

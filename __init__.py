@@ -3,6 +3,16 @@
 from __future__ import annotations
 
 import logging
+import sys
+from pathlib import Path
+
+_REPO_ROOT = Path(__file__).resolve().parent
+_AT_COMFY_SRC = _REPO_ROOT / "at-comfy"
+if _AT_COMFY_SRC.is_dir():
+    src = str(_AT_COMFY_SRC)
+    if src not in sys.path:
+        # Ensure ComfyUI imports this repo's backend package, not an older installed copy.
+        sys.path.insert(0, src)
 
 try:
     from .at_checkpoint_loader import ATCheckpointLoader

@@ -8,7 +8,7 @@ import pytest
 from at_comfy.civitai.models import CivitaiModel, CivitaiModelVersion
 from at_comfy.config import ATComfyConfig
 from at_comfy.db import get_conn
-from at_comfy.enrichment import EnrichmentService
+from at_comfy.enrichment import EnrichmentService, _fetch_cover
 
 
 def test_apply_civitai_writes_source_metadata_and_syncs_file_content_type(tmp_comfy_base: Path) -> None:
@@ -179,4 +179,49 @@ async def test_re_enrich_clears_metadata_and_calls_enrich_row(tmp_comfy_base: Pa
     ue = conn.execute("SELECT user_edited FROM library_assets WHERE asset_id = ?", (aid,)).fetchone()
     assert int(ue["user_edited"]) == 0
     assert len(rows_seen) == 1
+
+
+@pytest.mark.asyncio
+async def test_fetch_cover_prefers_video_when_poster_can_be_generated(
+    tmp_comfy_base: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    model = CivitaiModel(
+        id=321,
+        name="m",
+        type="LORA",
+        creator_username="c",
+        tags=[],
+        model_versions=[
+            CivitaiModelVersion(
+                id=11,
+                name="v1",
+                base_model="SDXL 1.0",
+                trained_words=[],
+                images=[
+                    {"type": "image", "url": "https://example.test/cover.jpg", "width": 1024, "height": 1024},
+                    {"type": "video", "url": "https://example.test/cover.mp4", "width": 1024, "height": 1024},
+                ],
+                files=[],
+            ),
+        ],
+    )
+
+    def fake_poster(url: str, dest_jpg: Path, *, headers=None) -> bool:
+        assert url.endswith(".mp4")
+        dest_jpg.parent.mkdir(parents=True, exist_ok=True)
+        dest_jpg.write_bytes(b"poster")
+        return True
+
+    class FailIfImageFetchClient:
+        def __init__(self, *args, **kwargs):
+            raise AssertionError("image cover fetch should not run when video poster succeeded")
+
+    monkeypatch.setattr("at_comfy.enrichment.poster_jpeg_from_video_url", fake_poster)
+    monkeypatch.setattr("at_comfy.enrichment.httpx.AsyncClient", FailIfImageFetchClient)
+
+    await _fetch_cover(77, model, ATComfyConfig(generate_video_posters=True, download_example_videos=False))
+
+    cov = tmp_comfy_base / "at_cache" / "covers"
+    assert (cov / "77.jpg").read_bytes() == b"poster"
+    assert not (cov / "77.mp4").exists()
 

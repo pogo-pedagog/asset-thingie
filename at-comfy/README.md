@@ -41,6 +41,8 @@ Config file: `<ComfyUI base>/at_comfy_config.json`
 | `max_parallel_downloads` | `2` | Concurrent download limit |
 | `hide_early_access` | `true` | Hide early-access models in browse results |
 | `hide_nsfw` | `true` | Hide NSFW content (set to `false` in config to show) |
+| `download_example_videos` | `false` | When `true`, cache full Civitai gallery video samples under `at_cache` during enrichment |
+| `generate_video_posters` | `true` | Extract JPEG posters for videos (uses **ffmpeg** when installed; enrichment still succeeds without it) |
 
 Database: `<ComfyUI base>/at_comfy.db`
 Image cache: `<ComfyUI base>/at_cache/`

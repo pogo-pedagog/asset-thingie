@@ -114,5 +114,7 @@ export interface AtComfyPublicConfig {
   download_subpath_template: string;
   hide_early_access: boolean;
   hide_nsfw: boolean;
+  download_example_videos: boolean;
+  generate_video_posters: boolean;
   scan_directories: Record<string, string | null>;
 }

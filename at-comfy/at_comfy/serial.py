@@ -25,10 +25,82 @@ def _lora_syntax(stem: str, default_strength: float | None) -> str:
     return f"<lora:{stem}:{sm}>"
 
 
+def cover_urls_for_asset(asset_id: int) -> dict[str, Any]:
+    """Local cover art under ``at_cache/covers``: optional poster JPG and optional MP4 playback."""
+    root = cache_root()
+    jpg = root / "covers" / f"{asset_id}.jpg"
+    mp4 = root / "covers" / f"{asset_id}.mp4"
+    cover_url = f"/at/cache/covers/{asset_id}.jpg" if jpg.is_file() else None
+    cover_playback_url = f"/at/cache/covers/{asset_id}.mp4" if mp4.is_file() else None
+    if cover_playback_url:
+        cover_media_type = "video"
+    elif cover_url:
+        cover_media_type = "image"
+    else:
+        cover_media_type = None
+    return {
+        "cover_url": cover_url,
+        "cover_playback_url": cover_playback_url,
+        "cover_media_type": cover_media_type,
+    }
+
+
 def cover_url_thumbnail(asset_id: int) -> str | None:
-    cache_cover = cache_root() / "covers" / f"{asset_id}.jpg"
-    if cache_cover.is_file():
-        return f"/at/cache/covers/{asset_id}.jpg"
+    return cover_urls_for_asset(asset_id).get("cover_url")
+
+
+def _cover_video_url_from_snapshot(raw_snapshot_json: Any) -> str | None:
+    if not raw_snapshot_json:
+        return None
+    try:
+        snap = json.loads(raw_snapshot_json) if isinstance(raw_snapshot_json, str) else raw_snapshot_json
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(snap, dict):
+        return None
+    model = snap.get("model")
+    if not isinstance(model, dict):
+        return None
+    versions = model.get("modelVersions") or model.get("model_versions") or []
+    if not isinstance(versions, list) or not versions:
+        return None
+
+    preferred_version_id = None
+    version_blob = snap.get("version")
+    if isinstance(version_blob, dict):
+        raw_id = version_blob.get("id")
+        try:
+            preferred_version_id = int(raw_id) if raw_id is not None else None
+        except (TypeError, ValueError):
+            preferred_version_id = None
+
+    ordered_versions: list[dict[str, Any]] = []
+    for v in versions:
+        if not isinstance(v, dict):
+            continue
+        if preferred_version_id is not None:
+            try:
+                if int(v.get("id")) == preferred_version_id:
+                    ordered_versions.append(v)
+                    break
+            except (TypeError, ValueError):
+                continue
+    for v in versions:
+        if isinstance(v, dict) and v not in ordered_versions:
+            ordered_versions.append(v)
+
+    for v in ordered_versions:
+        images = v.get("images") or []
+        if not isinstance(images, list):
+            continue
+        for im in images:
+            if not isinstance(im, dict):
+                continue
+            if str(im.get("type") or "image").strip().lower() != "video":
+                continue
+            url = str(im.get("url") or "").strip()
+            if url:
+                return url
     return None
 
 
@@ -67,10 +139,17 @@ def asset_row_to_dict(
                     meta[spec.key] = val
             if meta:
                 checkpoint_meta = meta
-    cover = cover_url_thumbnail(int(row["asset_id"]))
+    aid = int(row["asset_id"])
+    cov = cover_urls_for_asset(aid)
+    cover = cov["cover_url"]
+    remote_cover_playback = _cover_video_url_from_snapshot(
+        row["raw_snapshot_json"] if "raw_snapshot_json" in row.keys() else None
+    )
+    cover_playback = cov["cover_playback_url"] or remote_cover_playback
+    cover_media_type = "video" if cover_playback else cov["cover_media_type"]
     _ue = row["user_edited"] if "user_edited" in row.keys() else 0
     out: dict[str, Any] = {
-        "asset_id": int(row["asset_id"]),
+        "asset_id": aid,
         "display_name": row["display_name"],
         "filename": row["filename"],
         "stem": row["stem"],
@@ -84,6 +163,8 @@ def asset_row_to_dict(
         "usage_count": int(row["usage_count"] or 0),
         "last_used_at": _last_used_iso(row["last_used_at"]),
         "cover_url": cover,
+        "cover_playback_url": cover_playback,
+        "cover_media_type": cover_media_type,
         "tags": tags,
         "lora_syntax": lora_syntax,
         "comfy_lora_name": comfy_lora_name,
@@ -115,18 +196,46 @@ def example_media_to_dict(row: sqlite3.Row, asset_id: int) -> dict[str, Any]:
     mid = int(row["example_media_id"])
     rel_local = row["local_path"] or ""
     rel_thumb = row["thumbnail_local_path"] or ""
+    keys = row.keys()
+    rel_play = row["playback_local_path"] if "playback_local_path" in keys else ""
+    rel_poster = row["poster_local_path"] if "poster_local_path" in keys else ""
     base = "/at/cache/examples/" + str(asset_id)
-    url = f"{base}/{Path(rel_local).name}" if rel_local and Path(rel_local).name else (row["source_url"] or "")
-    thumb = f"{base}/{Path(rel_thumb).name}" if rel_thumb and Path(rel_thumb).name else url
+    mt = str(row["media_type"] or "image").lower()
+
+    def _named(rel: str) -> str:
+        name = Path(rel).name
+        return f"{base}/{name}" if rel and name else ""
+
+    if mt == "video":
+        playback = _named(str(rel_play or ""))
+        poster = _named(str(rel_poster or ""))
+        thumb_rel = str(rel_thumb or "") or str(rel_poster or "")
+        thumb = _named(thumb_rel) if thumb_rel else (poster or playback)
+        remote = str(row["source_url"] or "").strip()
+        full_url = playback or poster or remote
+        out_playback = playback or remote or None
+        out_poster = poster or None
+        primary_url = full_url or None
+    else:
+        url_path = _named(str(rel_local))
+        thumb_path = _named(str(rel_thumb)) if rel_thumb else url_path
+        remote = row["source_url"] or ""
+        primary_url = url_path or remote or None
+        thumb = thumb_path or primary_url
+        out_playback = None
+        out_poster = None
+
     out: dict[str, Any] = {
         "media_id": mid,
-        "url": url or None,
-        "thumbnail_url": thumb or url,
+        "url": primary_url,
+        "thumbnail_url": thumb or primary_url,
+        "poster_url": out_poster,
         "media_type": row["media_type"],
         "width": row["width"],
         "height": row["height"],
         "caption": row["caption"],
         "generation_params": generation_params,
+        "playback_url": out_playback,
     }
     return out
 

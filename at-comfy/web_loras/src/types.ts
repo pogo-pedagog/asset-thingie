@@ -13,6 +13,9 @@ export interface AssetItem {
   usage_count: number;
   last_used_at: string | null;
   cover_url: string | null;
+  /** Cached cover video (when the Civitai cover is a motion sample). */
+  cover_playback_url?: string | null;
+  cover_media_type?: string | null;
   tags: string[];
   lora_syntax: string | null;
   comfy_lora_name: string | null;
@@ -29,6 +32,7 @@ export interface ExampleMediaItem {
   /** Parsed Civitai / API snapshot for this example image, when present. */
   generation_params?: Record<string, unknown> | null;
   playback_url?: string | null;
+  poster_url?: string | null;
 }
 
 export interface AssetDetail extends AssetItem {

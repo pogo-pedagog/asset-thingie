@@ -11,6 +11,27 @@ const store = useAssetsStore();
 
 const coverSrc = computed(() => resolveCoverSrc(props.item.cover_url));
 
+const coverPlaybackSrc = computed(() => resolveCoverSrc(props.item.cover_playback_url));
+
+const coverIsVideo = computed(
+  () => (props.item.cover_media_type || "").toLowerCase() === "video" && Boolean(coverPlaybackSrc.value),
+);
+
+function onMediaEnter(e: MouseEvent) {
+  if (!coverIsVideo.value) return;
+  const v = (e.currentTarget as HTMLElement | null)?.querySelector("video.at-card__vid");
+  if (v instanceof HTMLVideoElement) void v.play().catch(() => {});
+}
+
+function onMediaLeave(e: MouseEvent) {
+  if (!coverIsVideo.value) return;
+  const v = (e.currentTarget as HTMLElement | null)?.querySelector("video.at-card__vid");
+  if (v instanceof HTMLVideoElement) {
+    v.pause();
+    v.currentTime = 0;
+  }
+}
+
 const triggersPreview = computed(() => {
   const tw = props.item.trigger_words || [];
   if (!tw.length) return "";
@@ -121,9 +142,26 @@ function onOpenDetail(ev: Event) {
         @change.stop="store.toggleAssetSelect(item.asset_id)"
       />
     </label>
-    <div class="at-card__media">
+    <div class="at-card__media" @mouseenter="onMediaEnter" @mouseleave="onMediaLeave">
+      <template v-if="coverIsVideo && coverPlaybackSrc">
+        <video
+          class="at-card__img at-card__vid"
+          :src="coverPlaybackSrc"
+          muted
+          loop
+          playsinline
+          preload="metadata"
+        />
+        <img
+          v-if="coverSrc"
+          :src="coverSrc"
+          loading="lazy"
+          alt=""
+          class="at-card__img at-card__img--freeze"
+        />
+      </template>
       <img
-        v-if="coverSrc"
+        v-else-if="coverSrc"
         :src="coverSrc"
         loading="lazy"
         alt=""
@@ -242,6 +280,19 @@ function onOpenDetail(ev: Event) {
   object-fit: cover;
   display: block;
   pointer-events: none;
+}
+.at-card__vid {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+.at-card__img--freeze {
+  position: relative;
+  z-index: 1;
+  transition: opacity 0.15s ease;
+}
+.at-card__media:hover .at-card__img--freeze {
+  opacity: 0;
 }
 .at-card__placeholder {
   display: flex;

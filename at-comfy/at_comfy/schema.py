@@ -179,6 +179,14 @@ def _schema_v2(conn: sqlite3.Connection) -> None:
         )
 
 
+def _schema_v3(conn: sqlite3.Connection) -> None:
+    cols = {str(r[1]) for r in conn.execute("PRAGMA table_info(example_media)").fetchall()}
+    if "playback_local_path" not in cols:
+        conn.execute("ALTER TABLE example_media ADD COLUMN playback_local_path TEXT")
+    if "poster_local_path" not in cols:
+        conn.execute("ALTER TABLE example_media ADD COLUMN poster_local_path TEXT")
+
+
 def migrate(conn: sqlite3.Connection) -> None:
     v = _user_version(conn)
     if v < 1:
@@ -190,3 +198,8 @@ def migrate(conn: sqlite3.Connection) -> None:
         logger.info("at_comfy: applying schema v2")
         _schema_v2(conn)
         _set_user_version(conn, 2)
+        v = 2
+    if v < 3:
+        logger.info("at_comfy: applying schema v3")
+        _schema_v3(conn)
+        _set_user_version(conn, 3)

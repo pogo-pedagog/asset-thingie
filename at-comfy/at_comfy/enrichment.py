@@ -15,11 +15,18 @@ from at_comfy.civitai.client import (
     CivitaiClient,
     civitai_download_headers,
     civitai_image_display_url,
+    civitai_image_original_fetch_url,
     civitai_image_url_with_width,
 )
 from at_comfy.civitai.models import CivitaiModel, CivitaiModelVersion
 from at_comfy.config import cache_root
 from at_comfy.db import get_conn
+from at_comfy.media_processing import (
+    jpeg_thumbnail_from_image_file,
+    poster_jpeg_from_video_file,
+    poster_jpeg_from_video_url,
+    video_extension_from_url,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -160,12 +167,13 @@ class EnrichmentService:
         conn.commit()
 
         cache = cache_root()
-        cover = cache / "covers" / f"{asset_id}.jpg"
-        if cover.is_file():
-            try:
-                cover.unlink()
-            except OSError:
-                pass
+        for suffix in (".jpg", ".mp4"):
+            cover = cache / "covers" / f"{asset_id}{suffix}"
+            if cover.is_file():
+                try:
+                    cover.unlink()
+                except OSError:
+                    pass
         ex_dir = cache / "examples" / str(asset_id)
         if ex_dir.is_dir():
             shutil.rmtree(ex_dir, ignore_errors=True)
@@ -243,7 +251,7 @@ class EnrichmentService:
                 client, ver_obj, nsfw=not cfg.hide_nsfw
             )
             await _fetch_cover(asset_id, full, cfg, ver=ver_obj)
-            await _fetch_example_images(asset_id, ver_gallery or ver_obj, cfg, model=full)
+            await _fetch_example_media(asset_id, ver_gallery or ver_obj, cfg, model=full)
         finally:
             if own:
                 await client.aclose()
@@ -371,42 +379,89 @@ async def _fetch_cover(
     v = ver or (model.model_versions[0] if model.model_versions else None)
     if not v:
         return
+    mid = int(model.id)
+    dest_dir = cache_root() / "covers"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest_jpg = dest_dir / f"{asset_id}.jpg"
+    dest_mp4 = dest_dir / f"{asset_id}.mp4"
+
+    cover_vid = None
+    for im in v.images or []:
+        if (im.type or "").strip().lower() == "video" and (im.url or "").strip():
+            cover_vid = im
+            break
+
     cover_im = None
     for im in v.images or []:
-        if (im.type or "image").strip().lower() != "image":
-            continue
-        u0 = (im.url or "").strip()
-        if u0:
+        if (im.type or "image").strip().lower() == "image" and (im.url or "").strip():
             cover_im = im
             break
+
+    # Prefer motion covers when we can materialize at least a poster or local MP4.
+    if cover_vid is not None and (
+        getattr(cfg, "download_example_videos", False) or getattr(cfg, "generate_video_posters", True)
+    ):
+        vu = cover_vid.url.strip()
+        hdr = civitai_download_headers(
+            api_key=cfg.civitai_api_key,
+            user_agent="AssetThingie-Comfy/0.1",
+            model_id=mid,
+            for_url=vu,
+        )
+        if getattr(cfg, "download_example_videos", False):
+            try:
+                async with httpx.AsyncClient(timeout=180.0, follow_redirects=True) as c:
+                    r = await c.get(vu, headers=hdr)
+                    if r.is_success and r.content:
+                        dest_mp4.write_bytes(r.content)
+            except Exception as e:
+                logger.debug("cover video download failed: %s", e)
+            if getattr(cfg, "generate_video_posters", True) and dest_mp4.is_file():
+                poster_jpeg_from_video_file(dest_mp4, dest_jpg)
+            elif getattr(cfg, "generate_video_posters", True):
+                poster_jpeg_from_video_url(vu, dest_jpg, headers=hdr)
+        else:
+            if dest_mp4.is_file():
+                try:
+                    dest_mp4.unlink()
+                except OSError:
+                    pass
+            if getattr(cfg, "generate_video_posters", True):
+                poster_jpeg_from_video_url(vu, dest_jpg, headers=hdr)
+        if dest_jpg.is_file() or dest_mp4.is_file():
+            return
+
     if cover_im is None:
         return
-    dest = cache_root() / "covers" / f"{asset_id}.jpg"
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    base = civitai_image_display_url(cover_im.url, natural_width=cover_im.width)
-    u = civitai_image_url_with_width(base, 256)
-    headers = civitai_download_headers(
+
+    u_orig = civitai_image_original_fetch_url(cover_im.url, natural_width=cover_im.width)
+    hdr = civitai_download_headers(
         api_key=cfg.civitai_api_key,
         user_agent="AssetThingie-Comfy/0.1",
-        model_id=model.id,
-        for_url=u,
+        model_id=mid,
+        for_url=u_orig,
     )
     try:
-        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as c:
-            r = await c.get(u, headers=headers)
-            if r.is_success:
-                dest.write_bytes(r.content)
+        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as c:
+            r = await c.get(u_orig, headers=hdr)
+            if r.is_success and r.content:
+                dest_jpg.write_bytes(r.content)
     except Exception as e:
-        logger.debug("cover fetch failed: %s", e)
+        logger.debug("cover image fetch failed: %s", e)
+    if dest_mp4.is_file():
+        try:
+            dest_mp4.unlink()
+        except OSError:
+            pass
 
 
-async def _fetch_example_images(
+async def _fetch_example_media(
     asset_id: int,
     ver: CivitaiModelVersion | None,
     cfg: Any,
     *,
     model: CivitaiModel | None = None,
-    max_images: int = 5,
+    max_items: int = 5,
 ) -> None:
     if not ver or not ver.images:
         return
@@ -418,100 +473,233 @@ async def _fetch_example_images(
     sort_order = 0
     count = 0
     idx = 0
-    async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as c:
+
+    async with httpx.AsyncClient(timeout=180.0, follow_redirects=True) as c:
         for im in ver.images:
-            if count >= max_images:
+            if count >= max_items:
                 break
-            if (im.type or "image").strip().lower() != "image":
+            raw_type = (im.type or "image").strip().lower()
+            vu = (im.url or "").strip()
+            if not vu:
                 continue
-            u = (im.url or "").strip()
-            if not u:
-                continue
-            idx += 1
-            base_name = f"{idx:03d}.jpg"
-            thumb_name = f"{idx:03d}.thumb.jpg"
-            full_img = ex_root / base_name
-            full_thumb = ex_root / thumb_name
-            base = civitai_image_display_url(u, natural_width=im.width)
-            u_img = civitai_image_url_with_width(base, 512)
-            u_thumb = civitai_image_url_with_width(base, 200)
-            hdr_img = civitai_download_headers(
-                api_key=cfg.civitai_api_key,
-                user_agent="AssetThingie-Comfy/0.1",
-                model_id=mid,
-                for_url=u_img,
-            )
-            hdr_thumb = civitai_download_headers(
-                api_key=cfg.civitai_api_key,
-                user_agent="AssetThingie-Comfy/0.1",
-                model_id=mid,
-                for_url=u_thumb,
-            )
-            try:
+
+            if raw_type == "image":
+                idx += 1
+                base_name = f"{idx:03d}.jpg"
+                thumb_name = f"{idx:03d}.thumb.jpg"
+                full_img = ex_root / base_name
+                full_thumb = ex_root / thumb_name
+                u_orig = civitai_image_original_fetch_url(im.url, natural_width=im.width)
+                base_disp = civitai_image_display_url(im.url, natural_width=im.width)
+                u_fallback = civitai_image_url_with_width(base_disp, 512)
+                hdr_o = civitai_download_headers(
+                    api_key=cfg.civitai_api_key,
+                    user_agent="AssetThingie-Comfy/0.1",
+                    model_id=mid,
+                    for_url=u_orig,
+                )
+                hdr_f = civitai_download_headers(
+                    api_key=cfg.civitai_api_key,
+                    user_agent="AssetThingie-Comfy/0.1",
+                    model_id=mid,
+                    for_url=u_fallback,
+                )
+                hdr_t = civitai_download_headers(
+                    api_key=cfg.civitai_api_key,
+                    user_agent="AssetThingie-Comfy/0.1",
+                    model_id=mid,
+                    for_url=civitai_image_url_with_width(base_disp, 200),
+                )
+                try:
+                    if not full_img.is_file() or full_img.stat().st_size == 0:
+                        r = await c.get(u_orig, headers=hdr_o)
+                        if not (r.is_success and r.content):
+                            r = await c.get(u_fallback, headers=hdr_f)
+                        if r.is_success and r.content:
+                            full_img.write_bytes(r.content)
+                    if full_img.is_file() and full_img.stat().st_size > 0:
+                        if not full_thumb.is_file() or full_thumb.stat().st_size == 0:
+                            if not jpeg_thumbnail_from_image_file(full_img, full_thumb, max_side=200):
+                                rt = await c.get(civitai_image_url_with_width(base_disp, 200), headers=hdr_t)
+                                if rt.is_success and rt.content:
+                                    full_thumb.write_bytes(rt.content)
+                except Exception as e:
+                    logger.debug("example image failed: %s", e)
+                    continue
                 if not full_img.is_file() or full_img.stat().st_size == 0:
-                    r = await c.get(u_img, headers=hdr_img)
-                    if r.is_success:
-                        full_img.write_bytes(r.content)
-                if not full_thumb.is_file() or full_thumb.stat().st_size == 0:
-                    rt = await c.get(u_thumb, headers=hdr_thumb)
-                    if rt.is_success:
-                        full_thumb.write_bytes(rt.content)
-            except Exception as e:
-                logger.debug("example image failed: %s", e)
-                continue
-            if not full_img.is_file() or full_img.stat().st_size == 0:
-                continue
-            caption: str | None = None
-            meta_json: str | None = None
-            if im.meta:
-                meta_json = json.dumps(dict(im.meta))[:100000]
-                p = im.meta.get("prompt") or im.meta.get("Prompt")
-                if p:
-                    caption = str(p)[:2000]
-            exists = conn.execute(
-                "SELECT 1 FROM example_media WHERE asset_id = ? AND local_path = ?",
-                (asset_id, base_name),
-            ).fetchone()
-            if not exists:
-                conn.execute(
-                    """
-                    INSERT INTO example_media (
-                        asset_id, media_type, origin_type, local_path, source_url,
-                        width, height, caption, metadata_json, sort_order,
-                        thumbnail_local_path, created_at
-                    ) VALUES (?, 'image', 'civitai', ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        asset_id,
-                        base_name,
-                        u,
-                        im.width,
-                        im.height,
-                        caption,
-                        meta_json,
-                        sort_order,
-                        thumb_name,
-                        now,
-                    ),
+                    continue
+
+                caption, meta_json = _example_caption_meta(im)
+                _upsert_example_row(
+                    conn,
+                    asset_id=asset_id,
+                    media_type="image",
+                    source_url=vu,
+                    local_path=base_name,
+                    thumb_name=thumb_name,
+                    playback_name=None,
+                    poster_name=None,
+                    caption=caption,
+                    meta_json=meta_json,
+                    sort_order=sort_order,
+                    width=im.width,
+                    height=im.height,
+                    now=now,
                 )
-            elif meta_json or caption:
-                conn.execute(
-                    """
-                    UPDATE example_media SET
-                        caption = COALESCE(:caption, caption),
-                        metadata_json = COALESCE(:meta_json, metadata_json)
-                    WHERE asset_id = :asset_id AND local_path = :local_path
-                    """,
-                    {
-                        "caption": caption,
-                        "meta_json": meta_json,
-                        "asset_id": asset_id,
-                        "local_path": base_name,
-                    },
+                sort_order += 1
+                count += 1
+
+            elif raw_type == "video":
+                if not cfg.download_example_videos and not cfg.generate_video_posters:
+                    continue
+                idx += 1
+                ext = video_extension_from_url(vu)
+                play_name = f"{idx:03d}{ext}"
+                poster_name = f"{idx:03d}.poster.jpg"
+                thumb_name = f"{idx:03d}.thumb.jpg"
+                video_path = ex_root / play_name
+                poster_path = ex_root / poster_name
+                thumb_path = ex_root / thumb_name
+                hdr = civitai_download_headers(
+                    api_key=cfg.civitai_api_key,
+                    user_agent="AssetThingie-Comfy/0.1",
+                    model_id=mid,
+                    for_url=vu,
                 )
-            sort_order += 1
-            count += 1
+                try:
+                    if cfg.download_example_videos:
+                        if not video_path.is_file() or video_path.stat().st_size == 0:
+                            r = await c.get(vu, headers=hdr)
+                            if r.is_success and r.content:
+                                video_path.write_bytes(r.content)
+                        if video_path.is_file() and video_path.stat().st_size > 0:
+                            if cfg.generate_video_posters:
+                                poster_jpeg_from_video_file(video_path, poster_path)
+                            if not poster_path.is_file() and cfg.generate_video_posters:
+                                poster_jpeg_from_video_url(vu, poster_path, headers=dict(hdr))
+                    elif cfg.generate_video_posters:
+                        poster_jpeg_from_video_url(vu, poster_path, headers=dict(hdr))
+                except Exception as e:
+                    logger.debug("example video failed: %s", e)
+                    continue
+
+                poster_ok = poster_path.is_file() and poster_path.stat().st_size > 0
+                play_ok = video_path.is_file() and video_path.stat().st_size > 0
+                playback_rel = play_name if play_ok else None
+                if not poster_ok and not play_ok:
+                    continue
+
+                thumb_final: str | None = None
+                if poster_ok:
+                    if jpeg_thumbnail_from_image_file(poster_path, thumb_path, max_side=200):
+                        thumb_final = thumb_name
+                    else:
+                        thumb_final = poster_name
+                elif play_ok:
+                    # Avoid pointing ``thumbnail_local_path`` at an MP4 (breaks ``<img>`` tiles).
+                    if cfg.generate_video_posters and poster_jpeg_from_video_file(video_path, thumb_path):
+                        thumb_final = thumb_name
+                    else:
+                        thumb_final = None
+
+                local_primary = poster_name if poster_ok else play_name
+                caption, meta_json = _example_caption_meta(im)
+                _upsert_example_row(
+                    conn,
+                    asset_id=asset_id,
+                    media_type="video",
+                    source_url=vu,
+                    local_path=local_primary,
+                    thumb_name=thumb_final,
+                    playback_name=playback_rel,
+                    poster_name=poster_name if poster_ok else None,
+                    caption=caption,
+                    meta_json=meta_json,
+                    sort_order=sort_order,
+                    width=im.width,
+                    height=im.height,
+                    now=now,
+                )
+                sort_order += 1
+                count += 1
+            else:
+                continue
+
     conn.commit()
+
+
+def _example_caption_meta(im: Any) -> tuple[str | None, str | None]:
+    caption: str | None = None
+    meta_json: str | None = None
+    if im.meta:
+        meta_json = json.dumps(dict(im.meta))[:100000]
+        p = im.meta.get("prompt") or im.meta.get("Prompt")
+        if p:
+            caption = str(p)[:2000]
+    return caption, meta_json
+
+
+def _upsert_example_row(
+    conn: Any,
+    *,
+    asset_id: int,
+    media_type: str,
+    source_url: str,
+    local_path: str,
+    thumb_name: str | None,
+    playback_name: str | None,
+    poster_name: str | None,
+    caption: str | None,
+    meta_json: str | None,
+    sort_order: int,
+    width: int | None,
+    height: int | None,
+    now: str,
+) -> None:
+    exists = conn.execute(
+        "SELECT 1 FROM example_media WHERE asset_id = ? AND source_url = ?",
+        (asset_id, source_url),
+    ).fetchone()
+    if not exists:
+        conn.execute(
+            """
+            INSERT INTO example_media (
+                asset_id, media_type, origin_type, local_path, source_url,
+                width, height, caption, metadata_json, sort_order,
+                thumbnail_local_path, playback_local_path, poster_local_path, created_at
+            ) VALUES (?, ?, 'civitai', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                asset_id,
+                media_type,
+                local_path,
+                source_url,
+                width,
+                height,
+                caption,
+                meta_json,
+                sort_order,
+                thumb_name,
+                playback_name,
+                poster_name,
+                now,
+            ),
+        )
+    elif meta_json or caption:
+        conn.execute(
+            """
+            UPDATE example_media SET
+                caption = COALESCE(:caption, caption),
+                metadata_json = COALESCE(:meta_json, metadata_json)
+            WHERE asset_id = :asset_id AND source_url = :source_url
+            """,
+            {
+                "caption": caption,
+                "meta_json": meta_json,
+                "asset_id": asset_id,
+                "source_url": source_url,
+            },
+        )
 
 
 async def apply_civitai_metadata_from_download(
@@ -541,4 +729,4 @@ async def apply_civitai_metadata_from_download(
     finally:
         await client.aclose()
     await _fetch_cover(asset_id, model, cfg, ver=ver)
-    await _fetch_example_images(asset_id, ver_gallery or ver, cfg, model=model)
+    await _fetch_example_media(asset_id, ver_gallery or ver, cfg, model=model)
