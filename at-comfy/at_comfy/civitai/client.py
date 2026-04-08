@@ -468,8 +468,12 @@ class CivitaiClient:
                     f"Civitai API returned non-JSON ({r.status_code}): {raw[:200]!r}",
                     status_code=r.status_code,
                 ) from e
-
-        raise RuntimeError("unreachable: Civitai _request_json retry loop exhausted")
+        else:
+            # ``for``/``else``: runs if the loop exhausts without ``return`` (e.g. zero attempts).
+            raise CivitaiAPIError(
+                "Civitai request could not be completed (no successful response).",
+                status_code=None,
+            )
 
     def build_search_url(self, params: SearchParams) -> str:
         q = models_query_items_from_search_params(params)

@@ -16,6 +16,7 @@ from at_comfy.civitai.client import (
     civitai_download_headers,
     civitai_image_display_url,
     civitai_image_original_fetch_url,
+    civitai_image_strip_width_query,
     civitai_image_url_with_width,
 )
 from at_comfy.civitai.models import CivitaiModel, CivitaiModelVersion
@@ -428,7 +429,8 @@ async def _fetch_cover(
                     pass
             if getattr(cfg, "generate_video_posters", True):
                 poster_jpeg_from_video_url(vu, dest_jpg, headers=hdr)
-        if dest_jpg.is_file() or dest_mp4.is_file():
+        # Only stop here once we have a raster poster; MP4 alone still needs a JPG for grid/thumb.
+        if dest_jpg.is_file():
             return
 
     if cover_im is None:
@@ -448,7 +450,8 @@ async def _fetch_cover(
                 dest_jpg.write_bytes(r.content)
     except Exception as e:
         logger.debug("cover image fetch failed: %s", e)
-    if dest_mp4.is_file():
+    # Keep local MP4 when this version still has a video cover (poster may come from image fallback).
+    if cover_vid is None and dest_mp4.is_file():
         try:
             dest_mp4.unlink()
         except OSError:
@@ -534,7 +537,7 @@ async def _fetch_example_media(
                     conn,
                     asset_id=asset_id,
                     media_type="image",
-                    source_url=vu,
+                    source_url=_example_media_source_key("image", vu, natural_width=im.width),
                     local_path=base_name,
                     thumb_name=thumb_name,
                     playback_name=None,
@@ -608,7 +611,7 @@ async def _fetch_example_media(
                     conn,
                     asset_id=asset_id,
                     media_type="video",
-                    source_url=vu,
+                    source_url=_example_media_source_key("video", vu, natural_width=im.width),
                     local_path=local_primary,
                     thumb_name=thumb_final,
                     playback_name=playback_rel,
@@ -628,6 +631,16 @@ async def _fetch_example_media(
     conn.commit()
 
 
+def _example_media_source_key(media_type: str, raw_url: str, *, natural_width: int | None) -> str:
+    """Stable ``source_url`` for example rows so CDN/query variants map to one gallery item."""
+    u = (raw_url or "").strip()
+    if not u:
+        return u
+    if (media_type or "").strip().lower() == "image":
+        return civitai_image_original_fetch_url(u, natural_width=natural_width)
+    return civitai_image_strip_width_query(u)
+
+
 def _example_caption_meta(im: Any) -> tuple[str | None, str | None]:
     caption: str | None = None
     meta_json: str | None = None
@@ -637,6 +650,27 @@ def _example_caption_meta(im: Any) -> tuple[str | None, str | None]:
         if p:
             caption = str(p)[:2000]
     return caption, meta_json
+
+
+def _example_media_row_id_for_source(
+    conn: Any,
+    *,
+    asset_id: int,
+    media_type: str,
+    source_key: str,
+    natural_width: int | None,
+) -> int | None:
+    """Match by canonical key or by normalizing a legacy stored ``source_url``."""
+    for row in conn.execute(
+        "SELECT example_media_id, source_url FROM example_media WHERE asset_id = ? AND media_type = ?",
+        (asset_id, media_type),
+    ):
+        stored = (row["source_url"] or "").strip()
+        if stored == source_key:
+            return int(row["example_media_id"])
+        if _example_media_source_key(media_type, stored, natural_width=natural_width) == source_key:
+            return int(row["example_media_id"])
+    return None
 
 
 def _upsert_example_row(
@@ -656,11 +690,14 @@ def _upsert_example_row(
     height: int | None,
     now: str,
 ) -> None:
-    exists = conn.execute(
-        "SELECT 1 FROM example_media WHERE asset_id = ? AND source_url = ?",
-        (asset_id, source_url),
-    ).fetchone()
-    if not exists:
+    ex_id = _example_media_row_id_for_source(
+        conn,
+        asset_id=asset_id,
+        media_type=media_type,
+        source_key=source_url,
+        natural_width=width,
+    )
+    if ex_id is None:
         conn.execute(
             """
             INSERT INTO example_media (
@@ -685,19 +722,36 @@ def _upsert_example_row(
                 now,
             ),
         )
-    elif meta_json or caption:
+    else:
         conn.execute(
             """
             UPDATE example_media SET
+                source_url = :source_url,
+                media_type = :media_type,
+                local_path = :local_path,
+                width = :width,
+                height = :height,
+                sort_order = :sort_order,
+                thumbnail_local_path = :thumb_name,
+                playback_local_path = :playback_name,
+                poster_local_path = :poster_name,
                 caption = COALESCE(:caption, caption),
                 metadata_json = COALESCE(:meta_json, metadata_json)
-            WHERE asset_id = :asset_id AND source_url = :source_url
+            WHERE example_media_id = :example_media_id
             """,
             {
+                "source_url": source_url,
+                "media_type": media_type,
+                "local_path": local_path,
+                "width": width,
+                "height": height,
+                "sort_order": sort_order,
+                "thumb_name": thumb_name,
+                "playback_name": playback_name,
+                "poster_name": poster_name,
                 "caption": caption,
                 "meta_json": meta_json,
-                "asset_id": asset_id,
-                "source_url": source_url,
+                "example_media_id": ex_id,
             },
         )
 

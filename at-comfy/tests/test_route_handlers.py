@@ -9,8 +9,8 @@ from aiohttp.test_utils import TestClient, TestServer
 from at_comfy.civitai.models import CivitaiModel, CivitaiModelVersion, ModelListPage
 from at_comfy.db import get_conn
 from at_comfy.enrichment import EnrichmentService
-from at_comfy.routes import create_test_app
 from at_comfy.route_handlers import BROWSE_CIVITAI_LIMIT
+from at_comfy.routes import create_test_app
 
 
 @pytest.mark.asyncio

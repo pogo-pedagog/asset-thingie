@@ -8,7 +8,12 @@ import pytest
 from at_comfy.civitai.models import CivitaiModel, CivitaiModelVersion
 from at_comfy.config import ATComfyConfig
 from at_comfy.db import get_conn
-from at_comfy.enrichment import EnrichmentService, _fetch_cover
+from at_comfy.enrichment import (
+    EnrichmentService,
+    _example_media_source_key,
+    _fetch_cover,
+    _upsert_example_row,
+)
 
 
 def test_apply_civitai_writes_source_metadata_and_syncs_file_content_type(tmp_comfy_base: Path) -> None:
@@ -224,4 +229,191 @@ async def test_fetch_cover_prefers_video_when_poster_can_be_generated(
     cov = tmp_comfy_base / "at_cache" / "covers"
     assert (cov / "77.jpg").read_bytes() == b"poster"
     assert not (cov / "77.mp4").exists()
+
+
+@pytest.mark.asyncio
+async def test_fetch_cover_falls_back_to_image_when_video_poster_fails(
+    tmp_comfy_base: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    model = CivitaiModel(
+        id=322,
+        name="m",
+        type="LORA",
+        creator_username="c",
+        tags=[],
+        model_versions=[
+            CivitaiModelVersion(
+                id=12,
+                name="v1",
+                base_model="SDXL 1.0",
+                trained_words=[],
+                images=[
+                    {"type": "image", "url": "https://example.test/cover.jpg", "width": 1024, "height": 1024},
+                    {"type": "video", "url": "https://example.test/cover.mp4", "width": 1024, "height": 1024},
+                ],
+                files=[],
+            ),
+        ],
+    )
+
+    def poster_fails(url: str, dest_jpg: Path, *, headers=None) -> bool:
+        return False
+
+    image_payload = b"\xff\xd8_fallback_from_image"
+
+    class FakeImageOnlyClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def get(self, url, headers=None):
+            class R:
+                is_success = True
+                content = image_payload
+
+            return R()
+
+    monkeypatch.setattr("at_comfy.enrichment.poster_jpeg_from_video_url", poster_fails)
+    monkeypatch.setattr("at_comfy.enrichment.httpx.AsyncClient", FakeImageOnlyClient)
+
+    await _fetch_cover(78, model, ATComfyConfig(generate_video_posters=True, download_example_videos=False))
+
+    cov = tmp_comfy_base / "at_cache" / "covers"
+    assert (cov / "78.jpg").read_bytes() == image_payload
+    assert not (cov / "78.mp4").exists()
+
+
+@pytest.mark.asyncio
+async def test_fetch_cover_image_fallback_keeps_downloaded_mp4(
+    tmp_comfy_base: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    model = CivitaiModel(
+        id=323,
+        name="m",
+        type="LORA",
+        creator_username="c",
+        tags=[],
+        model_versions=[
+            CivitaiModelVersion(
+                id=13,
+                name="v1",
+                base_model="SDXL 1.0",
+                trained_words=[],
+                images=[
+                    {"type": "image", "url": "https://example.test/cover.jpg", "width": 1024, "height": 1024},
+                    {"type": "video", "url": "https://example.test/cover.mp4", "width": 1024, "height": 1024},
+                ],
+                files=[],
+            ),
+        ],
+    )
+
+    def poster_from_file_fails(video: Path, dest_jpg: Path) -> bool:
+        return False
+
+    image_payload = b"\xff\xd8_fallback_with_mp4"
+
+    class FakeVideoThenImageClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def get(self, url, headers=None):
+            u = str(url)
+
+            class R:
+                pass
+
+            r = R()
+            if u.endswith(".mp4"):
+                r.is_success = True
+                r.content = b"local_mp4_bytes"
+            else:
+                r.is_success = True
+                r.content = image_payload
+            return r
+
+    monkeypatch.setattr("at_comfy.enrichment.poster_jpeg_from_video_file", poster_from_file_fails)
+    monkeypatch.setattr("at_comfy.enrichment.httpx.AsyncClient", FakeVideoThenImageClient)
+
+    await _fetch_cover(
+        79,
+        model,
+        ATComfyConfig(generate_video_posters=True, download_example_videos=True),
+    )
+
+    cov = tmp_comfy_base / "at_cache" / "covers"
+    assert (cov / "79.jpg").read_bytes() == image_payload
+    assert (cov / "79.mp4").read_bytes() == b"local_mp4_bytes"
+
+
+def test_example_media_upsert_dedupes_width_query_variants(tmp_comfy_base: Path) -> None:
+    conn = get_conn()
+    p = tmp_comfy_base / "loras" / "ex.safetensors"
+    p.parent.mkdir(parents=True)
+    now = "2025-01-01T00:00:00Z"
+    sp = str(p.resolve())
+    conn.execute(
+        """
+        INSERT INTO library_files (
+            path, filename, stem, sha256, content_type, family, file_size_bytes, mtime, scanned_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (sp, "ex.safetensors", "ex", "BB", "LORA", "lora", 10, 1.0, now),
+    )
+    conn.execute(
+        """
+        INSERT INTO library_assets (
+            primary_path, display_name, content_type, family, trigger_words, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (sp, "n", "LORA", "lora", "[]", now, now),
+    )
+    aid = int(conn.execute("SELECT asset_id FROM library_assets WHERE primary_path = ?", (sp,)).fetchone()[0])
+    conn.execute(
+        """
+        INSERT INTO example_media (
+            asset_id, media_type, origin_type, local_path, source_url,
+            width, height, caption, metadata_json, sort_order,
+            thumbnail_local_path, playback_local_path, poster_local_path, created_at
+        ) VALUES (?, 'image', 'civitai', '001.jpg', ?, 1024, 1024, NULL, NULL, 0,
+                  NULL, NULL, NULL, ?)
+        """,
+        (aid, "https://image.example/img?width=512", now),
+    )
+    conn.commit()
+
+    key = _example_media_source_key("image", "https://image.example/img?width=200", natural_width=1024)
+    _upsert_example_row(
+        conn,
+        asset_id=aid,
+        media_type="image",
+        source_url=key,
+        local_path="002.jpg",
+        thumb_name="002.thumb.jpg",
+        playback_name=None,
+        poster_name=None,
+        caption=None,
+        meta_json=None,
+        sort_order=1,
+        width=1024,
+        height=1024,
+        now=now,
+    )
+    conn.commit()
+    n = int(conn.execute("SELECT COUNT(*) AS n FROM example_media WHERE asset_id = ?", (aid,)).fetchone()["n"])
+    assert n == 1
+    row = conn.execute("SELECT local_path, source_url FROM example_media WHERE asset_id = ?", (aid,)).fetchone()
+    assert row["local_path"] == "002.jpg"
+    assert row["source_url"] == key
 

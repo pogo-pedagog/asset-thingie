@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import httpx
 import pytest
-
 from at_comfy.civitai.client import (
     CivitaiAPIError,
     CivitaiClient,
