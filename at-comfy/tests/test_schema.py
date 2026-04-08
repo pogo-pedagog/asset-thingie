@@ -5,7 +5,6 @@ from __future__ import annotations
 import sqlite3
 
 import pytest
-
 from at_comfy.db import db_conn_for_tests
 from at_comfy.schema import _schema_v1, _schema_v2, _set_user_version, migrate
 

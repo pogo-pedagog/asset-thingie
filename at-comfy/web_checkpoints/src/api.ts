@@ -177,7 +177,7 @@ export async function fetchAssets(params: AssetQueryParams): Promise<AssetsRespo
   }
 }
 
-export function resolveCoverSrc(coverUrl: string | null): string | null {
+export function resolveCoverSrc(coverUrl: string | null | undefined): string | null {
   if (!coverUrl) return null;
   if (coverUrl.startsWith("http://") || coverUrl.startsWith("https://")) {
     return coverUrl;

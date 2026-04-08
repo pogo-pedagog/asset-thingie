@@ -398,6 +398,14 @@ class CivitaiClient:
     async def _request_json(self, method: str, url: str, **kwargs: Any) -> dict[str, Any]:
         headers = {**self._default_headers(), **kwargs.pop("headers", {})}
         extra = {k: v for k, v in kwargs.items() if k in ("params", "content", "json")}
+        if _CIVITAI_RETRY_MAX_ATTEMPTS <= 0:
+            raise CivitaiAPIError(
+                "Civitai request could not be completed (retry limit must be positive).",
+                status_code=None,
+            )
+        # Each attempt ends in ``return``, ``raise``, or ``continue``. The last attempt never
+        # ``continue``s (transport and retryable HTTP errors raise instead), so with a
+        # positive limit the loop always finishes via ``return`` or ``raise``—never by falling through.
         for attempt in range(_CIVITAI_RETRY_MAX_ATTEMPTS):
             logger.debug(
                 "Civitai request %s %s headers=%s kwargs=%s",
@@ -468,12 +476,6 @@ class CivitaiClient:
                     f"Civitai API returned non-JSON ({r.status_code}): {raw[:200]!r}",
                     status_code=r.status_code,
                 ) from e
-        else:
-            # ``for``/``else``: runs if the loop exhausts without ``return`` (e.g. zero attempts).
-            raise CivitaiAPIError(
-                "Civitai request could not be completed (no successful response).",
-                status_code=None,
-            )
 
     def build_search_url(self, params: SearchParams) -> str:
         q = models_query_items_from_search_params(params)
