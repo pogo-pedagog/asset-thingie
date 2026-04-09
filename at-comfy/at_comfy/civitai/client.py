@@ -355,6 +355,9 @@ def civitai_version_is_active_early_access(version: dict, *, now: datetime) -> b
     """True when Civitai marks the version as in an early-access window.
 
     When ``earlyAccessDeadline`` is present and parseable, it is authoritative (past deadline ⇒ public).
+    The comparison is half-open in UTC: ``now < deadline`` ⇒ still EA; at exactly ``deadline`` ⇒ public.
+    Do not change to ``<=`` without revisiting ``test_early_access_deadline_instant_is_public``.
+
     Otherwise Civitai may still set ``availability`` to ``EarlyAccess`` with a null deadline
     (see e.g. public API model list payloads).
     """

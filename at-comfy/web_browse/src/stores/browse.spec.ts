@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
-import { useBrowseStore } from "./browse";
+import { useBrowseStore, stabilizePaginationChain } from "./browse";
 
 function makeItem(id: number, name = `model-${id}`) {
   return { id, name, type: "LORA", modelVersions: [] as never[] };
@@ -18,6 +18,21 @@ function stubFetchWith(payload: unknown) {
     ) as unknown as typeof fetch,
   );
 }
+
+describe("stabilizePaginationChain", () => {
+  it("classifies empty response with echoed next URL as repeated token (not empty page)", () => {
+    const url = "https://civitai.com/api/v1/models?cursor=broken";
+    const dec = stabilizePaginationChain({
+      requestedPageUrl: url,
+      returnedNextUrl: url,
+      returnedItemIds: [],
+      lastPageItemIds: [1],
+    });
+    expect(dec.nextUrl).toBeNull();
+    expect(dec.discardPage).toBe(false);
+    expect(dec.stopReason).toMatch(/repeated the same next-page token/i);
+  });
+});
 
 describe("browse store", () => {
   beforeEach(() => {

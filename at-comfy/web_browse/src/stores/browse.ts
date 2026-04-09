@@ -12,7 +12,8 @@ function normalizeForMatch(s: string): string {
   return s.replace(/[^a-z0-9]+/gi, "").toLowerCase();
 }
 
-function stabilizePaginationChain(opts: {
+/** Exported for unit tests; stabilizes Civitai cursor chains (duplicate page, broken token loop, empty page). */
+export function stabilizePaginationChain(opts: {
   requestedPageUrl: string | null;
   returnedNextUrl: string | null;
   returnedItemIds: number[];
