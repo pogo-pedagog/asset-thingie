@@ -35,6 +35,10 @@ export interface CivitaiFileSummary {
   id: number;
   name: string;
   downloadUrl?: string;
+  /** Civitai file role (JSON ``type``); often ``Model`` even for pruned vs full — see ``metadata.size``. */
+  type?: string | null;
+  /** Per-file hints, e.g. ``{ size: \"pruned\" | \"full\", fp: \"fp16\", format: \"SafeTensor\" }``. */
+  metadata?: Record<string, unknown> | null;
   primary?: boolean;
   sizeKB?: number | null;
   sha256?: string | null;

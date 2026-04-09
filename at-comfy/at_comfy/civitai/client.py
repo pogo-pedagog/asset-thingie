@@ -362,7 +362,7 @@ def civitai_version_is_active_early_access(version: dict, *, now: datetime) -> b
     if isinstance(raw, str):
         dt = parse_civitai_early_access_deadline(raw)
         if dt is not None:
-            return now <= dt
+            return now < dt
     av = version.get("availability")
     if isinstance(av, str) and av.strip().lower() == "earlyaccess":
         return True
@@ -408,9 +408,13 @@ def _prepare_or_filter_models_page_items(
     hide_early_access: bool,
     now: datetime,
 ) -> list[dict]:
-    """List/search: ``hide_early_access=False`` yields full rows.
+    """Shape models list payloads.
 
-    Batch-by-id uses the client's flag, like ``get_model``.
+    ``hide_early_access=False`` returns full rows (browse search / pagination;
+    EA versions stay attached with ``isEarlyAccess``).
+
+    ``hide_early_access=True`` drops active EA versions per item (used for
+    ``get_model``, ``fetch_models_by_ids``, and tests — not for browse list).
     """
     if not hide_early_access:
         return _prepare_browse_list_items(items, now=now)
@@ -479,6 +483,16 @@ def _filter_early_access(items: list[dict], hide: bool) -> list[dict]:
 
 
 class CivitaiClient:
+    """Civitai REST client.
+
+    Browse list calls (``search``, ``fetch_url``) always use full model rows so the UI
+    can show every version with ``isEarlyAccess`` markers.
+
+    ``hide_early_access`` only affects download-oriented fetches (``get_model``,
+    ``fetch_models_by_ids``): when True, active early-access versions are removed
+    before parsing, matching enrichment and batch download resolution.
+    """
+
     BASE_MODELS = "https://civitai.com/api/v1/models"
     BASE_VERSION = "https://civitai.com/api/v1/model-versions"
     BASE_IMAGES = "https://civitai.com/api/v1/images"
@@ -493,6 +507,7 @@ class CivitaiClient:
     ):
         self._api_key = (api_key or "").strip()
         self._user_agent = user_agent
+        # Used by get_model / fetch_models_by_ids only; browse list paths ignore this.
         self._hide_early_access = hide_early_access
         self._own_client = client is None
         self._client = client or httpx.AsyncClient(
@@ -605,6 +620,7 @@ class CivitaiClient:
         url = self.build_search_url(params)
         data = await self._request_json("GET", url)
         now = datetime.now(UTC)
+        # Browse policy: always full rows; ignore self._hide_early_access (see class docstring).
         items_raw = _prepare_or_filter_models_page_items(
             data.get("items") or [],
             hide_early_access=False,
@@ -616,6 +632,7 @@ class CivitaiClient:
     async def fetch_url(self, url: str) -> ModelListPage:
         data = await self._request_json("GET", url)
         now = datetime.now(UTC)
+        # Browse policy: same as search() — full rows for grid / infinite scroll.
         items_raw = _prepare_or_filter_models_page_items(
             data.get("items") or [],
             hide_early_access=False,

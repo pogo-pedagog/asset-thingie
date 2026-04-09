@@ -19,13 +19,6 @@ function stabilizePaginationChain(opts: {
   lastPageItemIds: number[] | null;
 }): { nextUrl: string | null; discardPage: boolean; stopReason: string | null } {
   const { requestedPageUrl, returnedNextUrl, returnedItemIds, lastPageItemIds } = opts;
-  if (returnedItemIds.length === 0) {
-    return {
-      nextUrl: null,
-      discardPage: true,
-      stopReason: "Civitai returned an empty page; stopping pagination.",
-    };
-  }
   if (
     lastPageItemIds !== null &&
     returnedItemIds.length === lastPageItemIds.length &&
@@ -37,11 +30,19 @@ function stabilizePaginationChain(opts: {
       stopReason: "Civitai repeated the same page; stopping pagination.",
     };
   }
+  // Run before empty-page handling so a broken next-token loop is reported even with zero rows.
   if (requestedPageUrl && returnedNextUrl && requestedPageUrl === returnedNextUrl) {
     return {
       nextUrl: null,
       discardPage: false,
       stopReason: "Civitai repeated the same next-page token; stopping pagination.",
+    };
+  }
+  if (returnedItemIds.length === 0) {
+    return {
+      nextUrl: null,
+      discardPage: true,
+      stopReason: "Civitai returned an empty page; stopping pagination.",
     };
   }
   return { nextUrl: returnedNextUrl, discardPage: false, stopReason: null };
@@ -176,9 +177,7 @@ export const useBrowseStore = defineStore("at-browse", () => {
       if (gen !== searchGeneration) return;
       error.value = e instanceof Error ? e.message : "Load more failed";
     } finally {
-      if (gen === searchGeneration) {
-        fetching.value = false;
-      }
+      fetching.value = false;
     }
   }
 
@@ -202,7 +201,10 @@ export const useBrowseStore = defineStore("at-browse", () => {
     error.value = null;
     if (reset) {
       stoppedReason.value = null;
-      lastPageItemIds.value = [];
+      // nextPage: drop stale cursor immediately so nothing can follow the old chain.
+      // lastPageItemIds: only clear in the winning response path (after gen check) so a
+      // superseded in-flight request never repopulates ids after a newer search reset.
+      nextPage.value = null;
       buffer.value = [];
     }
     try {

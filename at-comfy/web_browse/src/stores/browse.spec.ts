@@ -201,4 +201,45 @@ describe("browse store", () => {
     expect(s.items.map((i) => i.id)).toEqual([99]);
     expect(s.loading).toBe(false);
   });
+
+  it("superseded load-more clears fetching; search reset clears nextPage before response", async () => {
+    const s = useBrowseStore();
+    s.items = [makeItem(1)];
+    s.buffer = [];
+    s.nextPage = "https://civitai.com/api/v1/models?cursor=x";
+    s.lastPageItemIds = [1];
+
+    let resolvePage!: (v: Response) => void;
+    let resolveSearch!: (v: Response) => void;
+
+    const mockFetch = vi.fn()
+      .mockImplementationOnce(() => new Promise<Response>((r) => { resolvePage = r; }))
+      .mockImplementationOnce(() => new Promise<Response>((r) => { resolveSearch = r; }));
+    vi.stubGlobal("fetch", mockFetch as unknown as typeof fetch);
+
+    const loadP = s.loadMore();
+
+    expect(s.fetching).toBe(true);
+
+    const searchP = s.search(true);
+    expect(s.nextPage).toBeNull();
+
+    const json = (items: unknown[]) =>
+      JSON.stringify({ items, next_page: null, prev_page: null });
+
+    resolvePage!(
+      new Response(json([makeItem(200)]), { status: 200 }) as unknown as Response,
+    );
+    await loadP;
+
+    expect(s.fetching).toBe(false);
+
+    resolveSearch!(
+      new Response(json([makeItem(301)]), { status: 200 }) as unknown as Response,
+    );
+    await searchP;
+
+    expect(s.lastPageItemIds).toEqual([301]);
+    expect(s.items.map((i) => i.id)).toContain(301);
+  });
 });

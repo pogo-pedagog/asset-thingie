@@ -20,7 +20,44 @@ function defaultVersionIndex(vers: CivitaiVersionSummary[], skipEa: boolean): nu
 
 function versionOptionLabel(v: CivitaiVersionSummary): string {
   const base = v.name?.trim() || `v${v.id}`;
-  return v.isEarlyAccess ? `* ${base}` : base;
+  return v.isEarlyAccess ? `${base} (ea.)` : base;
+}
+
+function formatFileSizeKb(kb: number | null | undefined): string {
+  if (kb == null || !Number.isFinite(kb) || kb < 0) return "";
+  if (kb >= 1048576) return `${(kb / 1048576).toFixed(1)} GB`;
+  if (kb >= 1024) return `${(kb / 1024).toFixed(1)} MB`;
+  return `${Math.round(kb)} KB`;
+}
+
+/** Civitai often uses ``type: Model`` for both pruned and full; ``metadata.size`` is ``pruned`` / ``full``. */
+function fileRoleLabel(f: CivitaiFileSummary): string {
+  const meta = f.metadata;
+  const sizeRaw = meta && typeof meta === "object" && "size" in meta ? (meta as Record<string, unknown>).size : null;
+  const fpRaw = meta && typeof meta === "object" && "fp" in meta ? (meta as Record<string, unknown>).fp : null;
+  const size = typeof sizeRaw === "string" ? sizeRaw.trim().toLowerCase() : "";
+  const fp = typeof fpRaw === "string" ? fpRaw.trim() : "";
+  const typ = f.type?.trim() || "";
+
+  if (size === "pruned") {
+    return fp ? `Pruned Model · ${fp}` : "Pruned Model";
+  }
+  if (size === "full") {
+    return fp ? `Full Model · ${fp}` : "Full Model";
+  }
+
+  return typ || "Model";
+}
+
+/** Role from ``type`` and/or ``metadata``; ``sizeKB`` when present; trailing ``*`` = primary. */
+function fileSelectLabel(f: CivitaiFileSummary): string {
+  const name = f.name?.trim() || `file #${f.id}`;
+  const role = fileRoleLabel(f);
+  let label = `${name} (${role})`;
+  const size = formatFileSizeKb(f.sizeKB);
+  if (size) label = `${label} · ${size}`;
+  if (f.primary) label = `${label} *`;
+  return label;
 }
 
 const emit = defineEmits<{
@@ -251,7 +288,7 @@ const description = computed(() => props.model.description?.trim() || "");
         File
         <select v-model.number="fileIndex" class="at-input">
           <option v-for="(f, i) in currentFiles" :key="f.id" :value="i">
-            {{ f.name }} {{ f.primary ? "(primary)" : "" }}
+            {{ fileSelectLabel(f) }}
           </option>
         </select>
       </label>

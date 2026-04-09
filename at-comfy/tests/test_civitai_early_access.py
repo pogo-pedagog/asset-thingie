@@ -134,6 +134,20 @@ def test_availability_earlyaccess_without_deadline() -> None:
     assert ea[0]["id"] == 2808677
 
 
+def test_early_access_deadline_instant_is_public() -> None:
+    """At the deadline timestamp itself, early access has ended (interval is [start, deadline))."""
+    deadline = datetime(2027, 1, 15, 12, 0, 0, tzinfo=UTC)
+    v = {
+        "id": 1,
+        "earlyAccessDeadline": "2027-01-15T12:00:00Z",
+        "files": [_dummy_file()],
+    }
+    assert not civitai_version_is_active_early_access(v, now=deadline)
+    assert civitai_version_is_active_early_access(
+        v, now=deadline - timedelta(milliseconds=1)
+    )
+
+
 def test_parsed_deadline_in_past_overrides_earlyaccess_availability() -> None:
     """If deadline is parseable and in the past, version is public even if availability string is odd."""
     now = datetime.now(UTC)

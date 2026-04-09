@@ -300,7 +300,6 @@ def _browse_params_from_query(request: web.Request, cfg: ATComfyConfig) -> Searc
         period=request.query.get("period") or "All Time",  # type: ignore[arg-type]
         nsfw=nsfw_effective,
         limit=BROWSE_CIVITAI_LIMIT,
-        hide_early_access=cfg.hide_early_access,
     )
 
 

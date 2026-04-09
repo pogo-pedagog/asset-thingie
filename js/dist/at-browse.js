@@ -3394,11 +3394,7 @@ function Zs(e) {
 }
 function Qs(e) {
 	let { requestedPageUrl: t, returnedNextUrl: n, returnedItemIds: r, lastPageItemIds: i } = e;
-	return r.length === 0 ? {
-		nextUrl: null,
-		discardPage: !0,
-		stopReason: "Civitai returned an empty page; stopping pagination."
-	} : i !== null && r.length === i.length && r.every((e, t) => e === i[t]) ? {
+	return i !== null && r.length === i.length && r.every((e, t) => e === i[t]) ? {
 		nextUrl: null,
 		discardPage: !0,
 		stopReason: "Civitai repeated the same page; stopping pagination."
@@ -3406,6 +3402,10 @@ function Qs(e) {
 		nextUrl: null,
 		discardPage: !1,
 		stopReason: "Civitai repeated the same next-page token; stopping pagination."
+	} : r.length === 0 ? {
+		nextUrl: null,
+		discardPage: !0,
+		stopReason: "Civitai returned an empty page; stopping pagination."
 	} : {
 		nextUrl: n,
 		discardPage: !1,
@@ -3471,7 +3471,7 @@ var ec = xs("at-browse", () => {
 			if (e !== d) return;
 			u.value = t instanceof Error ? t.message : "Load more failed";
 		} finally {
-			e === d && (l.value = !1);
+			l.value = !1;
 		}
 	}
 	function T() {
@@ -3481,7 +3481,7 @@ var ec = xs("at-browse", () => {
 	}
 	async function re(e) {
 		let t = ++d;
-		c.value = !0, u.value = null, e && (g.value = null, h.value = [], p.value = []);
+		c.value = !0, u.value = null, e && (g.value = null, m.value = null, p.value = []);
 		try {
 			let n = await As(w());
 			if (t !== d) return;
@@ -4019,59 +4019,70 @@ var Wc = ["src", "poster"], Gc = ["src"], Kc = {
 		}
 		function i(e) {
 			let t = e.name?.trim() || `v${e.id}`;
-			return e.isEarlyAccess ? `* ${t}` : t;
+			return e.isEarlyAccess ? `${t} (ea.)` : t;
 		}
-		let a = t, { category: o, duplicateResolution: s, hideEarlyAccessFromConfig: c } = Ss(ec()), l = /* @__PURE__ */ L(0), u = /* @__PURE__ */ L(0), d = /* @__PURE__ */ L(!1), f = /* @__PURE__ */ L(null), p = /* @__PURE__ */ L(null), m = /* @__PURE__ */ L(null), h = /* @__PURE__ */ L(null), g = /* @__PURE__ */ L(null), _ = Z(() => n.model.modelVersions ?? []), v = Z(() => {
-			let e = c.value;
-			return _.value.filter((t) => e && t.isEarlyAccess ? !1 : !!t.files?.length).length;
+		function a(e) {
+			return e == null || !Number.isFinite(e) || e < 0 ? "" : e >= 1048576 ? `${(e / 1048576).toFixed(1)} GB` : e >= 1024 ? `${(e / 1024).toFixed(1)} MB` : `${Math.round(e)} KB`;
+		}
+		function o(e) {
+			let t = e.metadata, n = t && typeof t == "object" && "size" in t ? t.size : null, r = t && typeof t == "object" && "fp" in t ? t.fp : null, i = typeof n == "string" ? n.trim().toLowerCase() : "", a = typeof r == "string" ? r.trim() : "", o = e.type?.trim() || "";
+			return i === "pruned" ? a ? `Pruned Model · ${a}` : "Pruned Model" : i === "full" ? a ? `Full Model · ${a}` : "Full Model" : o || "Model";
+		}
+		function s(e) {
+			let t = `${e.name?.trim() || `file #${e.id}`} (${o(e)})`, n = a(e.sizeKB);
+			return n && (t = `${t} · ${n}`), e.primary && (t = `${t} *`), t;
+		}
+		let c = t, { category: l, duplicateResolution: u, hideEarlyAccessFromConfig: d } = Ss(ec()), f = /* @__PURE__ */ L(0), p = /* @__PURE__ */ L(0), m = /* @__PURE__ */ L(!1), h = /* @__PURE__ */ L(null), g = /* @__PURE__ */ L(null), _ = /* @__PURE__ */ L(null), v = /* @__PURE__ */ L(null), y = /* @__PURE__ */ L(null), b = Z(() => n.model.modelVersions ?? []), x = Z(() => {
+			let e = d.value;
+			return b.value.filter((t) => e && t.isEarlyAccess ? !1 : !!t.files?.length).length;
 		});
-		Bn(() => [n.model.id, c.value], () => {
-			l.value = r(n.model.modelVersions ?? [], c.value), u.value = 0, d.value = !1, f.value = null, p.value = null, m.value = null, h.value = null, g.value = null;
+		Bn(() => [n.model.id, d.value], () => {
+			f.value = r(n.model.modelVersions ?? [], d.value), p.value = 0, m.value = !1, h.value = null, g.value = null, _.value = null, v.value = null, y.value = null;
 		});
-		let y = Z(() => _.value[l.value] ?? null), b = Z(() => c.value && !!y.value?.isEarlyAccess), x = Z(() => y.value?.files ?? []);
-		Bn(y, (e) => {
-			if (u.value = 0, e?.files?.length) {
+		let S = Z(() => b.value[f.value] ?? null), C = Z(() => d.value && !!S.value?.isEarlyAccess), w = Z(() => S.value?.files ?? []);
+		Bn(S, (e) => {
+			if (p.value = 0, e?.files?.length) {
 				let t = e.files.findIndex((e) => e.primary);
-				t >= 0 && (u.value = t);
+				t >= 0 && (p.value = t);
 			}
 		});
-		let S = Z(() => y.value?.images ?? []), C = /* @__PURE__ */ L([]), w = /* @__PURE__ */ L(!1), ee = Z(() => `at-browse-cats-${n.model.id}`);
+		let ee = Z(() => S.value?.images ?? []), te = /* @__PURE__ */ L([]), ne = /* @__PURE__ */ L(!1), T = Z(() => `at-browse-cats-${n.model.id}`);
 		Bn(() => [n.model.id, n.model.type], async ([, e]) => {
-			w.value = !0;
+			ne.value = !0;
 			try {
 				let t = Uc(e);
-				C.value = (await Ns(t ? { family: t } : {})).categories ?? [];
+				te.value = (await Ns(t ? { family: t } : {})).categories ?? [];
 			} catch {
-				C.value = [];
+				te.value = [];
 			} finally {
-				w.value = !1;
+				ne.value = !1;
 			}
 		}, { immediate: !0 });
-		let te = Z(() => {
-			let e = y.value?.trainedWords;
+		let re = Z(() => {
+			let e = S.value?.trainedWords;
 			return Array.isArray(e) ? e : [];
 		});
-		async function ne(e) {
+		async function E(e) {
 			try {
 				await navigator.clipboard.writeText(e);
 			} catch {
-				a("error", "Copy failed");
+				c("error", "Copy failed");
 			}
 		}
-		function T() {
-			let e = y.value, t = x.value;
+		function ie() {
+			let e = S.value, t = w.value;
 			if (!e || !t.length) return null;
-			let n = t[u.value] ?? t[0];
+			let n = t[p.value] ?? t[0];
 			return n?.id ? {
 				versionId: e.id,
 				fileId: n.id
 			} : null;
 		}
-		async function re() {
-			if (b.value) return;
-			let e = T();
+		async function ae() {
+			if (C.value) return;
+			let e = ie();
 			if (!e) {
-				a("error", "No file on this version");
+				c("error", "No file on this version");
 				return;
 			}
 			try {
@@ -4079,110 +4090,110 @@ var Wc = ["src", "poster"], Gc = ["src"], Kc = {
 					civitai_model_id: n.model.id,
 					version_id: e.versionId,
 					file_id: e.fileId,
-					category: o.value.trim() || "General",
-					duplicate_resolution: s.value
-				}), a("downloaded");
+					category: l.value.trim() || "General",
+					duplicate_resolution: u.value
+				}), c("downloaded");
 			} catch (e) {
-				a("error", e instanceof Error ? e.message : "Download failed");
+				c("error", e instanceof Error ? e.message : "Download failed");
 			}
 		}
-		async function E() {
-			let e = [], t = c.value;
-			for (let r of _.value) {
+		async function D() {
+			let e = [], t = d.value;
+			for (let r of b.value) {
 				if (t && r.isEarlyAccess) continue;
 				let i = r.files ?? [];
 				if (!i.length) continue;
-				let a = i.findIndex((e) => e.primary), s = i[a >= 0 ? a : 0];
-				s?.id && e.push({
+				let a = i.findIndex((e) => e.primary), o = i[a >= 0 ? a : 0];
+				o?.id && e.push({
 					civitai_model_id: n.model.id,
 					version_id: r.id,
-					file_id: s.id,
-					category: o.value.trim() || "General"
+					file_id: o.id,
+					category: l.value.trim() || "General"
 				});
 			}
 			if (!e.length) {
-				a("error", "No downloadable files");
+				c("error", "No downloadable files");
 				return;
 			}
 			try {
-				await Fs(e, s.value), a("downloaded");
+				await Fs(e, u.value), c("downloaded");
 			} catch (e) {
-				a("error", e instanceof Error ? e.message : "Batch download failed");
+				c("error", e instanceof Error ? e.message : "Batch download failed");
 			}
 		}
-		function ie(e) {
+		function oe(e) {
 			let t = (e.type || "image").toLowerCase();
-			h.value = t, t === "video" ? (p.value = e.url, m.value = null, f.value = null) : (p.value = null, m.value = null, f.value = Oc(e.url));
+			v.value = t, t === "video" ? (g.value = e.url, _.value = null, h.value = null) : (g.value = null, _.value = null, h.value = Oc(e.url));
 			let n = e.meta;
-			g.value = n && typeof n == "object" && Object.keys(n).length ? n : null;
+			y.value = n && typeof n == "object" && Object.keys(n).length ? n : null;
 		}
-		function ae(e) {
+		function O(e) {
 			let t = e.currentTarget?.querySelector("video");
 			t instanceof HTMLVideoElement && t.play().catch(() => {});
 		}
-		function D(e) {
+		function se(e) {
 			let t = e.currentTarget?.querySelector("video");
 			t instanceof HTMLVideoElement && (t.pause(), t.currentTime = 0);
 		}
-		function oe() {
-			f.value = null, p.value = null, m.value = null, h.value = null, g.value = null;
+		function ce() {
+			h.value = null, g.value = null, _.value = null, v.value = null, y.value = null;
 		}
-		let O = Z(() => n.model.description?.trim() || "");
+		let le = Z(() => n.model.description?.trim() || "");
 		return (t, n) => (G(), K("div", Jc, [
 			q("div", Yc, [q("h3", null, A(e.model.name), 1), q("button", {
 				type: "button",
 				class: "at-btn",
-				onClick: n[0] ||= (e) => a("close")
+				onClick: n[0] ||= (e) => c("close")
 			}, "Close")]),
 			q("p", Xc, [
 				q("span", Zc, A(e.model.type), 1),
 				R(Ec)(e.model) ? (G(), K("span", Qc, " · " + A(R(Ec)(e.model)), 1)) : Y("", !0),
-				y.value?.baseModel ? (G(), K("span", $c, " · " + A(y.value.baseModel), 1)) : Y("", !0)
+				S.value?.baseModel ? (G(), K("span", $c, " · " + A(S.value.baseModel), 1)) : Y("", !0)
 			]),
-			_.value.length ? (G(), K("div", el, [q("label", tl, [n[8] ||= J(" Version ", -1), B(q("select", {
-				"onUpdate:modelValue": n[1] ||= (e) => l.value = e,
+			b.value.length ? (G(), K("div", el, [q("label", tl, [n[8] ||= J(" Version ", -1), B(q("select", {
+				"onUpdate:modelValue": n[1] ||= (e) => f.value = e,
 				class: "at-input"
-			}, [(G(!0), K(U, null, jr(_.value, (e, t) => (G(), K("option", {
+			}, [(G(!0), K(U, null, jr(b.value, (e, t) => (G(), K("option", {
 				key: e.id,
 				value: t
 			}, A(i(e)), 9, nl))), 128))], 512), [[
 				Oo,
-				l.value,
+				f.value,
 				void 0,
 				{ number: !0 }
-			]])]), x.value.length > 1 ? (G(), K("label", rl, [n[9] ||= J(" File ", -1), B(q("select", {
-				"onUpdate:modelValue": n[2] ||= (e) => u.value = e,
+			]])]), w.value.length > 1 ? (G(), K("label", rl, [n[9] ||= J(" File ", -1), B(q("select", {
+				"onUpdate:modelValue": n[2] ||= (e) => p.value = e,
 				class: "at-input"
-			}, [(G(!0), K(U, null, jr(x.value, (e, t) => (G(), K("option", {
+			}, [(G(!0), K(U, null, jr(w.value, (e, t) => (G(), K("option", {
 				key: e.id,
 				value: t
-			}, A(e.name) + " " + A(e.primary ? "(primary)" : ""), 9, il))), 128))], 512), [[
+			}, A(s(e)), 9, il))), 128))], 512), [[
 				Oo,
-				u.value,
+				p.value,
 				void 0,
 				{ number: !0 }
 			]])])) : Y("", !0)])) : Y("", !0),
-			O.value ? (G(), K("div", al, [q("div", {
-				class: k(["model-detail__desc-inner", { "model-detail__desc-inner--collapsed": !d.value && O.value.length > 400 }]),
-				innerHTML: O.value
-			}, null, 10, ol), O.value.length > 400 ? (G(), K("button", {
+			le.value ? (G(), K("div", al, [q("div", {
+				class: k(["model-detail__desc-inner", { "model-detail__desc-inner--collapsed": !m.value && le.value.length > 400 }]),
+				innerHTML: le.value
+			}, null, 10, ol), le.value.length > 400 ? (G(), K("button", {
 				key: 0,
 				type: "button",
 				class: "at-btn at-btn--link",
-				onClick: n[3] ||= (e) => d.value = !d.value
-			}, A(d.value ? "Show less" : "Show more"), 1)) : Y("", !0)])) : Y("", !0),
-			te.value.length ? (G(), K("div", sl, [n[10] ||= q("span", { class: "model-detail__tw-label" }, "Trigger words", -1), q("div", cl, [q("code", ll, A(te.value.join(", ")), 1), q("button", {
+				onClick: n[3] ||= (e) => m.value = !m.value
+			}, A(m.value ? "Show less" : "Show more"), 1)) : Y("", !0)])) : Y("", !0),
+			re.value.length ? (G(), K("div", sl, [n[10] ||= q("span", { class: "model-detail__tw-label" }, "Trigger words", -1), q("div", cl, [q("code", ll, A(re.value.join(", ")), 1), q("button", {
 				type: "button",
 				class: "at-btn at-btn--sm",
-				onClick: n[4] ||= (e) => ne(te.value.join(", "))
+				onClick: n[4] ||= (e) => E(re.value.join(", "))
 			}, "Copy")])])) : Y("", !0),
-			S.value.length ? (G(), K("div", ul, [n[12] ||= q("span", { class: "model-detail__tw-label" }, "Gallery", -1), q("div", dl, [(G(!0), K(U, null, jr(S.value, (e, t) => (G(), K("button", {
+			ee.value.length ? (G(), K("div", ul, [n[12] ||= q("span", { class: "model-detail__tw-label" }, "Gallery", -1), q("div", dl, [(G(!0), K(U, null, jr(ee.value, (e, t) => (G(), K("button", {
 				key: t,
 				type: "button",
 				class: "model-detail__thumb",
-				onMouseenter: (t) => (e.type || "image").toLowerCase() === "video" ? ae(t) : void 0,
-				onMouseleave: (t) => (e.type || "image").toLowerCase() === "video" ? D(t) : void 0,
-				onClick: (t) => ie(e)
+				onMouseenter: (t) => (e.type || "image").toLowerCase() === "video" ? O(t) : void 0,
+				onMouseleave: (t) => (e.type || "image").toLowerCase() === "video" ? se(t) : void 0,
+				onClick: (t) => oe(e)
 			}, [(e.type || "image").toLowerCase() === "video" ? (G(), K(U, { key: 0 }, [q("video", {
 				class: "model-detail__thumb-vid",
 				src: e.url,
@@ -4199,16 +4210,16 @@ var Wc = ["src", "poster"], Gc = ["src"], Kc = {
 			q("div", hl, [
 				q("label", gl, [
 					n[13] ||= J(" Category folder ", -1),
-					w.value ? (G(), K("span", _l, "Loading folders…")) : Y("", !0),
+					ne.value ? (G(), K("span", _l, "Loading folders…")) : Y("", !0),
 					B(q("input", {
-						"onUpdate:modelValue": n[5] ||= (e) => /* @__PURE__ */ I(o) ? o.value = e : null,
+						"onUpdate:modelValue": n[5] ||= (e) => /* @__PURE__ */ I(l) ? l.value = e : null,
 						class: "at-input model-detail__category-combo",
-						list: ee.value,
+						list: T.value,
 						placeholder: "Pick from list or type a folder name (e.g. General)",
 						autocomplete: "off",
 						"aria-autocomplete": "list"
-					}, null, 8, vl), [[wo, R(o)]]),
-					q("datalist", { id: ee.value }, [(G(!0), K(U, null, jr(C.value, (e) => (G(), K("option", {
+					}, null, 8, vl), [[wo, R(l)]]),
+					q("datalist", { id: T.value }, [(G(!0), K(U, null, jr(te.value, (e) => (G(), K("option", {
 						key: "dl-" + e,
 						value: e
 					}, null, 8, bl))), 128))], 8, yl)
@@ -4216,36 +4227,36 @@ var Wc = ["src", "poster"], Gc = ["src"], Kc = {
 				q("fieldset", xl, [
 					n[16] ||= q("legend", null, "Duplicate file", -1),
 					q("label", null, [B(q("input", {
-						"onUpdate:modelValue": n[6] ||= (e) => /* @__PURE__ */ I(s) ? s.value = e : null,
+						"onUpdate:modelValue": n[6] ||= (e) => /* @__PURE__ */ I(u) ? u.value = e : null,
 						type: "radio",
 						value: "skip"
-					}, null, 512), [[Do, R(s)]]), n[14] ||= J(" Skip if exists", -1)]),
+					}, null, 512), [[Do, R(u)]]), n[14] ||= J(" Skip if exists", -1)]),
 					q("label", null, [B(q("input", {
-						"onUpdate:modelValue": n[7] ||= (e) => /* @__PURE__ */ I(s) ? s.value = e : null,
+						"onUpdate:modelValue": n[7] ||= (e) => /* @__PURE__ */ I(u) ? u.value = e : null,
 						type: "radio",
 						value: "replace"
-					}, null, 512), [[Do, R(s)]]), n[15] ||= J(" Replace", -1)])
+					}, null, 512), [[Do, R(u)]]), n[15] ||= J(" Replace", -1)])
 				]),
-				b.value ? (G(), K("p", Sl, " Early-access version — not downloadable here. ")) : Y("", !0),
-				q("div", Cl, [b.value ? Y("", !0) : (G(), K("button", {
+				C.value ? (G(), K("p", Sl, " Early-access version — not downloadable here. ")) : Y("", !0),
+				q("div", Cl, [C.value ? Y("", !0) : (G(), K("button", {
 					key: 0,
 					type: "button",
 					class: "at-btn",
-					onClick: re
-				}, " Download ")), v.value > 1 ? (G(), K("button", {
+					onClick: ae
+				}, " Download ")), x.value > 1 ? (G(), K("button", {
 					key: 1,
 					type: "button",
 					class: "at-btn",
-					onClick: E
+					onClick: D
 				}, " Download all versions ")) : Y("", !0)])
 			]),
 			na(qc, {
-				"image-url": f.value,
-				"playback-url": p.value,
-				"poster-url": m.value,
-				"media-type": h.value,
-				meta: g.value,
-				onClose: oe
+				"image-url": h.value,
+				"playback-url": g.value,
+				"poster-url": _.value,
+				"media-type": v.value,
+				meta: y.value,
+				onClose: ce
 			}, null, 8, [
 				"image-url",
 				"playback-url",
@@ -4255,7 +4266,7 @@ var Wc = ["src", "poster"], Gc = ["src"], Kc = {
 			])
 		]));
 	}
-}), [["__scopeId", "data-v-d2727fb3"]]), Tl = { class: "config-panel" }, El = {
+}), [["__scopeId", "data-v-284d1255"]]), Tl = { class: "config-panel" }, El = {
 	key: 0,
 	class: "at-err"
 }, Dl = {
@@ -4732,6 +4743,4 @@ function Su(e) {
 	return n.use(t), n.mount(e), n;
 }
 //#endregion
-export { Su as mount };
-
 export { Su as mount };

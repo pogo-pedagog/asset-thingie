@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from collections.abc import Callable
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -254,21 +255,16 @@ def _schema_v3(conn: sqlite3.Connection) -> None:
 
 
 def migrate(conn: sqlite3.Connection) -> None:
-    v = _user_version(conn)
-    if v < 1:
-        logger.info("at_comfy: applying schema v1")
-        _schema_v1(conn)
-        _set_user_version(conn, 1)
-        conn.commit()
-    v = _user_version(conn)
-    if v < 2:
-        logger.info("at_comfy: applying schema v2")
-        _schema_v2(conn)
-        _set_user_version(conn, 2)
-        conn.commit()
-    v = _user_version(conn)
-    if v < 3:
-        logger.info("at_comfy: applying schema v3")
-        _schema_v3(conn)
-        _set_user_version(conn, 3)
+    """Apply pending migrations in order; each step commits DDL + PRAGMA user_version together."""
+    steps: list[tuple[int, Callable[[sqlite3.Connection], None]]] = [
+        (1, _schema_v1),
+        (2, _schema_v2),
+        (3, _schema_v3),
+    ]
+    for target, schema_fn in steps:
+        if _user_version(conn) >= target:
+            continue
+        logger.info("at_comfy: applying schema v%s", target)
+        schema_fn(conn)
+        _set_user_version(conn, target)
         conn.commit()

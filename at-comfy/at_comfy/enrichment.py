@@ -577,9 +577,8 @@ async def _fetch_example_media(
                                 video_path.write_bytes(r.content)
                         if video_path.is_file() and video_path.stat().st_size > 0:
                             if cfg.generate_video_posters:
-                                poster_jpeg_from_video_file(video_path, poster_path)
-                            if not poster_path.is_file() and cfg.generate_video_posters:
-                                poster_jpeg_from_video_url(vu, poster_path, headers=dict(hdr))
+                                if not poster_jpeg_from_video_file(video_path, poster_path):
+                                    poster_jpeg_from_video_url(vu, poster_path, headers=dict(hdr))
                     elif cfg.generate_video_posters:
                         poster_jpeg_from_video_url(vu, poster_path, headers=dict(hdr))
                 except Exception as e:
