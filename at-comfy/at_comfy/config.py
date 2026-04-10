@@ -24,6 +24,8 @@ class ATComfyConfig:
     download_example_videos: bool = False
     #: When True, extract JPEG poster frames (via ffmpeg when available) from local or remote videos.
     generate_video_posters: bool = True
+    #: When Civitai hash lookup misses, try CivArchive ``/sha256`` + ``/models`` before marking not_found.
+    enrichment_civarchive_fallback: bool = True
     scan_directories: dict[str, str | None] = field(
         default_factory=lambda: {"loras": None, "checkpoints": None},
     )
@@ -51,6 +53,7 @@ class ATComfyConfig:
             hide_nsfw=bool(raw.get("hide_nsfw", True)),
             download_example_videos=bool(raw.get("download_example_videos", False)),
             generate_video_posters=bool(raw.get("generate_video_posters", True)),
+            enrichment_civarchive_fallback=bool(raw.get("enrichment_civarchive_fallback", True)),
             scan_directories={
                 "loras": str(lora) if lora else None,
                 "checkpoints": str(ckpt) if ckpt else None,
@@ -123,6 +126,7 @@ def save_config(cfg: ATComfyConfig) -> None:
         "hide_nsfw": cfg.hide_nsfw,
         "download_example_videos": cfg.download_example_videos,
         "generate_video_posters": cfg.generate_video_posters,
+        "enrichment_civarchive_fallback": cfg.enrichment_civarchive_fallback,
         "scan_directories": dict(cfg.scan_directories),
     }
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")

@@ -272,12 +272,53 @@ def _schema_v3(conn: sqlite3.Connection) -> None:
     _backfill_example_media_video_paths(conn)
 
 
+def _schema_v4(conn: sqlite3.Connection) -> None:
+    """Ensure ``source_metadata.raw_snapshot_json`` exists (library_repo / enrichment rely on it)."""
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='source_metadata' LIMIT 1",
+    ).fetchone()
+    if not row:
+        return
+    cols = {str(r[1]) for r in conn.execute("PRAGMA table_info(source_metadata)").fetchall()}
+    if "raw_snapshot_json" not in cols:
+        conn.execute("ALTER TABLE source_metadata ADD COLUMN raw_snapshot_json TEXT")
+
+
+def _schema_v5(conn: sqlite3.Connection) -> None:
+    """CivArchive: distinct ``base_model`` strings seen in browse search traffic."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS civarchive_base_models (
+            name TEXT PRIMARY KEY COLLATE NOCASE,
+            first_seen_at TEXT NOT NULL,
+            last_seen_at TEXT NOT NULL
+        );
+        """,
+    )
+
+
+def _schema_v6(conn: sqlite3.Connection) -> None:
+    """Civitai: distinct ``baseModel`` strings seen in browse list/page traffic."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS civitai_base_models (
+            name TEXT PRIMARY KEY COLLATE NOCASE,
+            first_seen_at TEXT NOT NULL,
+            last_seen_at TEXT NOT NULL
+        );
+        """,
+    )
+
+
 def migrate(conn: sqlite3.Connection) -> None:
     """Apply pending migrations in order; each step commits DDL + PRAGMA user_version together."""
     steps: list[tuple[int, Callable[[sqlite3.Connection], None]]] = [
         (1, _schema_v1),
         (2, _schema_v2),
         (3, _schema_v3),
+        (4, _schema_v4),
+        (5, _schema_v5),
+        (6, _schema_v6),
     ]
     for target, schema_fn in steps:
         if _user_version(conn) >= target:

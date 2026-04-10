@@ -2,7 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import type { CivitaiFileSummary, CivitaiImageSummary, CivitaiModelDetail, CivitaiVersionSummary } from "../types";
-import { creatorNameFromItem, thumbUrl } from "../utils/civitaiDisplay";
+import { creatorNameFromItem, expandCivArchiveUrl, mediaDisplayUrl } from "../utils/civitaiDisplay";
 import { filterFamilyForModelType } from "../utils/filterFamilyForModelType";
 import ImageMetaLightbox from "@at-shared/ImageMetaLightbox.vue";
 import * as api from "../api";
@@ -71,6 +71,8 @@ const { category, duplicateResolution, hideEarlyAccessFromConfig } = storeToRefs
 const versionIndex = ref(0);
 const fileIndex = ref(0);
 const descExpanded = ref(false);
+/** Expanded absolute URL; empty = worker default ordering. */
+const civarchivePreferredMirror = ref("");
 const lightboxUrl = ref<string | null>(null);
 const lightboxPlaybackUrl = ref<string | null>(null);
 const lightboxPosterUrl = ref<string | null>(null);
@@ -95,6 +97,7 @@ watch(
       hideEarlyAccessFromConfig.value,
     );
     fileIndex.value = 0;
+    civarchivePreferredMirror.value = "";
     descExpanded.value = false;
     lightboxUrl.value = null;
     lightboxPlaybackUrl.value = null;
@@ -116,12 +119,41 @@ const currentVersionIsEarlyAccess = computed(
 
 const currentFiles = computed((): CivitaiFileSummary[] => currentVersion.value?.files ?? []);
 
+const civarchiveMirrorOptions = computed(() => {
+  if (props.model.source !== "civarchive") return [] as { value: string; label: string }[];
+  const files = currentFiles.value;
+  const f = files[fileIndex.value] ?? files[0];
+  if (!f) return [];
+  const rows: { value: string; label: string }[] = [{ value: "", label: "Auto (worker order)" }];
+  const seen = new Set<string>();
+  const push = (value: string, label: string): void => {
+    if (!value || seen.has(value)) return;
+    seen.add(value);
+    rows.push({ value, label });
+  };
+  const du = expandCivArchiveUrl(f.downloadUrl ? String(f.downloadUrl) : "");
+  if (du) push(du, "Primary URL");
+  for (const m of f.mirrors ?? []) {
+    const eu = expandCivArchiveUrl(m.url ? String(m.url) : "");
+    if (!eu) continue;
+    const src = (m.source ?? "").trim() || "mirror";
+    const short = eu.length > 56 ? `${eu.slice(0, 56)}…` : eu;
+    push(eu, `${src}: ${short}`);
+  }
+  return rows;
+});
+
 watch(currentVersion, (v) => {
   fileIndex.value = 0;
+  civarchivePreferredMirror.value = "";
   if (v?.files?.length) {
     const prim = v.files.findIndex((f) => f.primary);
     if (prim >= 0) fileIndex.value = prim;
   }
+});
+
+watch(fileIndex, () => {
+  civarchivePreferredMirror.value = "";
 });
 
 const currentImages = computed((): CivitaiImageSummary[] => currentVersion.value?.images ?? []);
@@ -177,13 +209,28 @@ async function downloadCurrent(): Promise<void> {
     return;
   }
   try {
-    await api.postDownload({
-      civitai_model_id: props.model.id,
-      version_id: spec.versionId,
-      file_id: spec.fileId,
-      category: category.value.trim() || "General",
-      duplicate_resolution: duplicateResolution.value,
-    });
+    if (props.model.source === "civarchive") {
+      const mid = typeof props.model.id === "number" ? props.model.id : Number(props.model.id);
+      const body: Record<string, unknown> = {
+        source: "civarchive",
+        civarchive_model_id: mid,
+        civarchive_version_id: spec.versionId,
+        civarchive_file_id: spec.fileId,
+        category: category.value.trim() || "General",
+        duplicate_resolution: duplicateResolution.value,
+      };
+      const pref = civarchivePreferredMirror.value.trim();
+      if (pref) body.civarchive_preferred_download_url = pref;
+      await api.postDownload(body);
+    } else {
+      await api.postDownload({
+        civitai_model_id: props.model.id,
+        version_id: spec.versionId,
+        file_id: spec.fileId,
+        category: category.value.trim() || "General",
+        duplicate_resolution: duplicateResolution.value,
+      });
+    }
     emit("downloaded");
   } catch (e) {
     emit("error", e instanceof Error ? e.message : "Download failed");
@@ -200,12 +247,23 @@ async function downloadAllVersions(): Promise<void> {
     const primaryI = files.findIndex((f) => f.primary);
     const f = files[primaryI >= 0 ? primaryI : 0];
     if (!f?.id) continue;
-    items.push({
-      civitai_model_id: props.model.id,
-      version_id: v.id,
-      file_id: f.id,
-      category: category.value.trim() || "General",
-    });
+    if (props.model.source === "civarchive") {
+      const mid = typeof props.model.id === "number" ? props.model.id : Number(props.model.id);
+      items.push({
+        source: "civarchive",
+        civarchive_model_id: mid,
+        civarchive_version_id: v.id,
+        civarchive_file_id: f.id,
+        category: category.value.trim() || "General",
+      });
+    } else {
+      items.push({
+        civitai_model_id: props.model.id,
+        version_id: v.id,
+        file_id: f.id,
+        category: category.value.trim() || "General",
+      });
+    }
   }
   if (!items.length) {
     emit("error", "No downloadable files");
@@ -222,14 +280,15 @@ async function downloadAllVersions(): Promise<void> {
 function openLightbox(im: CivitaiImageSummary): void {
   const t = (im.type || "image").toLowerCase();
   lightboxMediaType.value = t;
+  const src = mediaDisplayUrl(im.url, props.model.source);
   if (t === "video") {
-    lightboxPlaybackUrl.value = im.url;
+    lightboxPlaybackUrl.value = src;
     lightboxPosterUrl.value = null;
     lightboxUrl.value = null;
   } else {
     lightboxPlaybackUrl.value = null;
     lightboxPosterUrl.value = null;
-    lightboxUrl.value = thumbUrl(im.url);
+    lightboxUrl.value = src;
   }
   const m = im.meta;
   lightboxMeta.value =
@@ -292,6 +351,14 @@ const description = computed(() => props.model.description?.trim() || "");
           </option>
         </select>
       </label>
+      <label v-if="model.source === 'civarchive' && civarchiveMirrorOptions.length > 1" class="at-label">
+        Download mirror
+        <select v-model="civarchivePreferredMirror" class="at-input">
+          <option v-for="opt in civarchiveMirrorOptions" :key="opt.value || 'auto'" :value="opt.value">
+            {{ opt.label }}
+          </option>
+        </select>
+      </label>
     </div>
 
     <div v-if="description" class="model-detail__desc">
@@ -328,7 +395,7 @@ const description = computed(() => props.model.description?.trim() || "");
           <template v-if="(im.type || 'image').toLowerCase() === 'video'">
             <video
               class="model-detail__thumb-vid"
-              :src="im.url"
+              :src="mediaDisplayUrl(im.url, model.source)"
               muted
               loop
               playsinline
@@ -336,7 +403,12 @@ const description = computed(() => props.model.description?.trim() || "");
             />
             <span class="model-detail__vid">Video</span>
           </template>
-          <img v-else :src="thumbUrl(im.url)" :alt="`Image ${idx}`" loading="lazy" />
+          <img
+            v-else
+            :src="mediaDisplayUrl(im.url, model.source)"
+            :alt="`Image ${idx}`"
+            loading="lazy"
+          />
         </button>
       </div>
     </div>

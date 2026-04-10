@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 from at_comfy.civitai.models import CivitaiModel, CivitaiModelVersion
@@ -13,6 +15,7 @@ from at_comfy.enrichment import (
     _example_media_source_key,
     _fetch_cover,
     _upsert_example_row,
+    apply_civarchive_catalog_to_asset,
 )
 
 
@@ -121,6 +124,107 @@ def test_apply_civitai_skips_display_name_when_user_edited(tmp_comfy_base: Path)
     assert dn is not None
     assert dn["display_name"] == "User Title"
     assert dn["base_model"] is None
+
+
+@pytest.mark.asyncio
+async def test_enrich_civitai_ignores_hide_early_access_for_client(
+    tmp_comfy_base: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """By-hash can resolve an EA version; ``get_model`` must list it — enrichment forces EA visible."""
+    conn = get_conn()
+    p = tmp_comfy_base / "loras" / "ea_hash.safetensors"
+    p.parent.mkdir(parents=True)
+    now = "2025-01-01T00:00:00Z"
+    hx = "f" * 64
+    sp = str(p.resolve())
+    conn.execute(
+        """
+        INSERT INTO library_files (
+            path, filename, stem, sha256, content_type, family, file_size_bytes, mtime, scanned_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (sp, "ea_hash.safetensors", "ea_hash", hx, "LORA", "lora", 10, 1.0, now),
+    )
+    conn.execute(
+        """
+        INSERT INTO library_assets (
+            primary_path, display_name, content_type, family, trigger_words, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (sp, "local", "LORA", "lora", "[]", now, now),
+    )
+    aid = int(conn.execute("SELECT asset_id FROM library_assets WHERE primary_path = ?", (sp,)).fetchone()[0])
+    conn.commit()
+
+    client_kw: list[dict[str, Any]] = []
+
+    class FakeCivitai:
+        def __init__(self, **kwargs: Any) -> None:
+            client_kw.append(dict(kwargs))
+
+        async def model_version_by_hash(self, sha: str) -> dict[str, Any]:
+            assert sha == hx.upper()
+            return {"id": 20, "modelId": 100}
+
+        async def get_model(self, model_id: int, *, nsfw: bool = False) -> CivitaiModel:
+            assert model_id == 100
+            return CivitaiModel(
+                id=100,
+                name="EA Model",
+                type="LORA",
+                creator_username="c",
+                tags=[],
+                model_versions=[
+                    CivitaiModelVersion(
+                        id=20,
+                        name="ea",
+                        base_model="SD 1.5",
+                        trained_words=["ea_only"],
+                        is_early_access=True,
+                        images=[],
+                        files=[],
+                    ),
+                    CivitaiModelVersion(
+                        id=21,
+                        name="public",
+                        base_model="SD 1.5",
+                        trained_words=["public_only"],
+                        images=[],
+                        files=[],
+                    ),
+                ],
+            )
+
+        async def get_version_detail(self, version_id: int, *, nsfw: bool = False) -> CivitaiModelVersion:
+            assert version_id == 20
+            m = await self.get_model(100, nsfw=nsfw)
+            v = next(x for x in m.model_versions if x.id == version_id)
+            return v
+
+        async def aclose(self) -> None:
+            pass
+
+    monkeypatch.setattr("at_comfy.enrichment.CivitaiClient", FakeCivitai)
+
+    async def noop_gallery(**kwargs: Any) -> None:
+        pass
+
+    monkeypatch.setattr("at_comfy.enrichment._fetch_civitai_cover_and_example_gallery", noop_gallery)
+
+    svc = EnrichmentService()
+    await svc.enrich_asset(aid, ATComfyConfig(hide_early_access=True))
+
+    assert len(client_kw) == 1
+    assert client_kw[0].get("hide_early_access") is False
+    tw = conn.execute("SELECT trigger_words FROM library_assets WHERE asset_id = ?", (aid,)).fetchone()
+    assert tw is not None
+    assert json.loads(tw["trigger_words"]) == ["ea_only"]
+    sm = conn.execute(
+        "SELECT external_version_id FROM source_metadata WHERE asset_id = ?",
+        (aid,),
+    ).fetchone()
+    assert sm is not None
+    assert sm["external_version_id"] == "20"
 
 
 @pytest.mark.asyncio
@@ -364,6 +468,74 @@ async def test_fetch_cover_image_fallback_keeps_downloaded_mp4(
     assert (cov / "79.mp4").read_bytes() == b"local_mp4_bytes"
 
 
+@pytest.mark.asyncio
+async def test_fetch_cover_downloaded_mp4_falls_back_to_url_poster_when_file_extract_fails(
+    tmp_comfy_base: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """If local ffmpeg frame grab fails, still try URL-based poster (video-only cover)."""
+    model = CivitaiModel(
+        id=324,
+        name="m",
+        type="LORA",
+        creator_username="c",
+        tags=[],
+        model_versions=[
+            CivitaiModelVersion(
+                id=14,
+                name="v1",
+                base_model="SDXL 1.0",
+                trained_words=[],
+                images=[
+                    {"type": "video", "url": "https://example.test/cover.mp4", "width": 1024, "height": 1024},
+                ],
+                files=[],
+            ),
+        ],
+    )
+
+    def poster_from_file_fails(video: Path, dest_jpg: Path) -> bool:
+        return False
+
+    def poster_from_url_ok(url: str, dest_jpg: Path, *, headers=None) -> bool:
+        assert url.endswith(".mp4")
+        dest_jpg.parent.mkdir(parents=True, exist_ok=True)
+        dest_jpg.write_bytes(b"\xff\xd8_from_url_poster")
+        return True
+
+    class FakeMp4Client:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def get(self, url, headers=None):
+            u = str(url)
+
+            class R:
+                is_success = True
+                content = b"downloaded_mp4" if u.endswith(".mp4") else b""
+
+            return R()
+
+    monkeypatch.setattr("at_comfy.enrichment.poster_jpeg_from_video_file", poster_from_file_fails)
+    monkeypatch.setattr("at_comfy.enrichment.poster_jpeg_from_video_url", poster_from_url_ok)
+    monkeypatch.setattr("at_comfy.enrichment.httpx.AsyncClient", FakeMp4Client)
+
+    await _fetch_cover(
+        80,
+        model,
+        ATComfyConfig(generate_video_posters=True, download_example_videos=True),
+    )
+
+    cov = tmp_comfy_base / "at_cache" / "covers"
+    assert (cov / "80.jpg").read_bytes() == b"\xff\xd8_from_url_poster"
+    assert (cov / "80.mp4").read_bytes() == b"downloaded_mp4"
+
+
 def test_example_media_upsert_dedupes_width_query_variants(tmp_comfy_base: Path) -> None:
     conn = get_conn()
     p = tmp_comfy_base / "loras" / "ex.safetensors"
@@ -423,4 +595,228 @@ def test_example_media_upsert_dedupes_width_query_variants(tmp_comfy_base: Path)
     row = conn.execute("SELECT local_path, source_url FROM example_media WHERE asset_id = ?", (aid,)).fetchone()
     assert row["local_path"] == "002.jpg"
     assert row["source_url"] == key
+
+
+@pytest.mark.asyncio
+async def test_enrich_asset_civarchive_fallback_after_civitai_miss(
+    tmp_comfy_base: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    conn = get_conn()
+    p = tmp_comfy_base / "loras" / "ca_fb.safetensors"
+    p.parent.mkdir(parents=True)
+    now = "2025-01-01T00:00:00Z"
+    hx = "a" * 64
+    sp = str(p.resolve())
+    conn.execute(
+        """
+        INSERT INTO library_files (
+            path, filename, stem, sha256, content_type, family, file_size_bytes, mtime, scanned_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (sp, "ca_fb.safetensors", "ca_fb", hx, "LORA", "lora", 10, 1.0, now),
+    )
+    conn.execute(
+        """
+        INSERT INTO library_assets (
+            primary_path, display_name, content_type, family, trigger_words, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (sp, "local", "LORA", "lora", "[]", now, now),
+    )
+    aid = int(conn.execute("SELECT asset_id FROM library_assets WHERE primary_path = ?", (sp,)).fetchone()[0])
+    conn.commit()
+
+    class FakeCivitai:
+        def __init__(self, *a, **k):
+            pass
+
+        async def model_version_by_hash(self, sha):
+            return None
+
+        async def aclose(self):
+            pass
+
+    monkeypatch.setattr("at_comfy.enrichment.CivitaiClient", FakeCivitai)
+
+    class FakeCivArchive:
+        def __init__(self, *a, **k):
+            pass
+
+        async def get_by_sha256(self, hx_arg):
+            assert hx_arg == hx.lower()
+            return {"model": {"id": 501, "version": {"id": 902}}}
+
+        async def get_model(self, mid, vid):
+            return {
+                "id": mid,
+                "name": "CA LoRA",
+                "type": "LORA",
+                "username": "u1",
+                "tags": ["arch"],
+                "is_nsfw": False,
+                "version": {
+                    "id": vid,
+                    "name": "v1",
+                    "baseModel": "SD 1.5",
+                    "trigger": ["tw"],
+                    "files": [],
+                    "images": [{"image_url": "https://example.test/img.jpg"}],
+                },
+            }
+
+        async def aclose(self):
+            pass
+
+    monkeypatch.setattr("at_comfy.enrichment.CivArchiveClient", FakeCivArchive)
+
+    gallery_calls: list[dict[str, Any]] = []
+
+    async def capture_gallery(**kwargs: Any) -> None:
+        gallery_calls.append(kwargs)
+
+    monkeypatch.setattr("at_comfy.enrichment._fetch_civitai_cover_and_example_gallery", capture_gallery)
+
+    svc = EnrichmentService()
+    await svc.enrich_asset(aid, ATComfyConfig())
+
+    sm = conn.execute(
+        "SELECT source, title, source_url FROM source_metadata WHERE asset_id = ?",
+        (aid,),
+    ).fetchone()
+    assert sm is not None
+    assert sm["source"] == "civarchive"
+    assert sm["title"] == "CA LoRA"
+    assert "civarchive.com/models/501" in (sm["source_url"] or "")
+    assert "modelVersionId=902" in (sm["source_url"] or "")
+    lf = conn.execute("SELECT enrichment_status FROM library_files WHERE path = ?", (sp,)).fetchone()
+    assert lf["enrichment_status"] == "found"
+    assert len(gallery_calls) == 1
+    assert gallery_calls[0]["rich_gallery"] is False
+    assert gallery_calls[0]["client"] is None
+
+
+@pytest.mark.asyncio
+async def test_enrich_asset_skips_civarchive_when_fallback_disabled(
+    tmp_comfy_base: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    conn = get_conn()
+    p = tmp_comfy_base / "loras" / "no_ca.safetensors"
+    p.parent.mkdir(parents=True)
+    now = "2025-01-01T00:00:00Z"
+    hx = "b" * 64
+    sp = str(p.resolve())
+    conn.execute(
+        """
+        INSERT INTO library_files (
+            path, filename, stem, sha256, content_type, family, file_size_bytes, mtime, scanned_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (sp, "no_ca.safetensors", "no_ca", hx, "LORA", "lora", 10, 1.0, now),
+    )
+    conn.execute(
+        """
+        INSERT INTO library_assets (
+            primary_path, display_name, content_type, family, trigger_words, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (sp, "local", "LORA", "lora", "[]", now, now),
+    )
+    aid = int(conn.execute("SELECT asset_id FROM library_assets WHERE primary_path = ?", (sp,)).fetchone()[0])
+    conn.commit()
+
+    class FakeCivitai:
+        def __init__(self, *a, **k):
+            pass
+
+        async def model_version_by_hash(self, sha):
+            return None
+
+        async def aclose(self):
+            pass
+
+    monkeypatch.setattr("at_comfy.enrichment.CivitaiClient", FakeCivitai)
+
+    def boom_civarchive(*a: Any, **k: Any) -> None:
+        raise AssertionError("CivArchiveClient should not be constructed when fallback is off")
+
+    monkeypatch.setattr("at_comfy.enrichment.CivArchiveClient", boom_civarchive)
+
+    svc = EnrichmentService()
+    await svc.enrich_asset(aid, ATComfyConfig(enrichment_civarchive_fallback=False))
+
+    assert conn.execute("SELECT 1 FROM source_metadata WHERE asset_id = ?", (aid,)).fetchone() is None
+    lf = conn.execute("SELECT enrichment_status FROM library_files WHERE path = ?", (sp,)).fetchone()
+    assert lf["enrichment_status"] == "not_found"
+
+
+@pytest.mark.asyncio
+async def test_apply_civarchive_catalog_to_asset_sets_source_and_file_id(
+    tmp_comfy_base: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Post-download path uses same catalog apply as enrichment; persists CivArchive file id."""
+    conn = get_conn()
+    p = tmp_comfy_base / "loras" / "ca_dl_meta.safetensors"
+    p.parent.mkdir(parents=True)
+    now = "2025-01-01T00:00:00Z"
+    sp = str(p.resolve())
+    conn.execute(
+        """
+        INSERT INTO library_files (
+            path, filename, stem, sha256, content_type, family, file_size_bytes, mtime, scanned_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (sp, "ca_dl_meta.safetensors", "ca_dl_meta", "c" * 64, "LORA", "lora", 10, 1.0, now),
+    )
+    conn.execute(
+        """
+        INSERT INTO library_assets (
+            primary_path, display_name, content_type, family, trigger_words, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (sp, "local", "LORA", "lora", "[]", now, now),
+    )
+    aid = int(conn.execute("SELECT asset_id FROM library_assets WHERE primary_path = ?", (sp,)).fetchone()[0])
+    conn.commit()
+
+    raw_model = {
+        "id": 601,
+        "name": "DL Meta LoRA",
+        "type": "LORA",
+        "username": "creator_dl",
+        "tags": ["x"],
+        "is_nsfw": False,
+        "version": {
+            "id": 702,
+            "name": "v1",
+            "baseModel": "SDXL 1.0",
+            "trigger": ["word"],
+            "files": [{"id": 55, "name": "w.safetensors", "is_primary": True}],
+            "images": [{"image_url": "https://example.test/dl.jpg"}],
+        },
+    }
+
+    async def noop_gallery(**kwargs: Any) -> None:
+        pass
+
+    monkeypatch.setattr("at_comfy.enrichment._fetch_civitai_cover_and_example_gallery", noop_gallery)
+
+    ok = await apply_civarchive_catalog_to_asset(
+        asset_id=aid,
+        raw_model=raw_model,
+        cfg=ATComfyConfig(),
+        primary_path=sp,
+        external_file_id="55",
+    )
+    assert ok is True
+    sm = conn.execute(
+        "SELECT source, title, external_file_id, source_url FROM source_metadata WHERE asset_id = ?",
+        (aid,),
+    ).fetchone()
+    assert sm["source"] == "civarchive"
+    assert sm["title"] == "DL Meta LoRA"
+    assert sm["external_file_id"] == "55"
+    assert "civarchive.com/models/601" in (sm["source_url"] or "")
+    assert "modelVersionId=702" in (sm["source_url"] or "")
+    lf = conn.execute("SELECT enrichment_status FROM library_files WHERE path = ?", (sp,)).fetchone()
+    assert lf["enrichment_status"] == "found"
 

@@ -9,7 +9,7 @@ from typing import Any
 from urllib.parse import urlparse
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 
 
 def _utc_now() -> datetime:
@@ -112,6 +112,10 @@ class DownloadRequest(BaseModel):
     file_id: int
     filename: str
     install_dir: Path
+    """Ordered mirrors / fallbacks; defaults to ``[download_url]`` when empty (legacy rows)."""
+    candidate_urls: list[str] = Field(default_factory=list)
+    """Extra headers per candidate URL (e.g. bearer for gated Civitai mirrors)."""
+    headers_by_url: dict[str, dict[str, str]] = Field(default_factory=dict)
     expected_sha256: str | None = None
     duplicate_resolution: DuplicateResolution = DuplicateResolution.NONE
     """If SKIP, worker completes as SKIPPED; if REPLACE, existing dest may be overwritten."""
@@ -125,6 +129,12 @@ class DownloadRequest(BaseModel):
     """If True, save gallery video samples as ``{stem}_example_video_N.*`` beside the model file."""
     batch_tags: list[str] = Field(default_factory=list)
     """Tags to apply on library registration (from batch acquire)."""
+
+    @model_validator(mode="after")
+    def _default_candidate_urls(self) -> DownloadRequest:
+        if not self.candidate_urls:
+            self.candidate_urls = [self.download_url]
+        return self
 
     @field_validator("download_url")
     @classmethod
