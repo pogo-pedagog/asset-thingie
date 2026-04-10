@@ -47,6 +47,16 @@ async def test_asset_detail_not_found(tmp_comfy_base) -> None:
 
 
 @pytest.mark.asyncio
+async def test_browse_sources_lists_civitai(tmp_comfy_base) -> None:
+    app = create_test_app()
+    async with TestClient(TestServer(app)) as client:
+        r = await client.get("/at/browse/sources")
+        assert r.status == 200
+        data = await r.json()
+        assert data["sources"][0]["id"] == "civitai"
+
+
+@pytest.mark.asyncio
 async def test_browse_search_uses_mock_client(tmp_comfy_base, monkeypatch) -> None:
     sample = CivitaiModel.from_api(
         {
@@ -71,7 +81,7 @@ async def test_browse_search_uses_mock_client(tmp_comfy_base, monkeypatch) -> No
         async def aclose(self):
             return None
 
-    monkeypatch.setattr("at_comfy.route_handlers.CivitaiClient", FakeClient)
+    monkeypatch.setattr("at_comfy.browse_sources.civitai.CivitaiClient", FakeClient)
     app = create_test_app()
     async with TestClient(TestServer(app)) as client:
         r = await client.get("/at/browse/search?limit=5&q=test")
@@ -113,7 +123,7 @@ async def test_browse_page_merges_url_with_search_params(tmp_comfy_base, monkeyp
         async def aclose(self):
             return None
 
-    monkeypatch.setattr("at_comfy.route_handlers.CivitaiClient", FakeClient)
+    monkeypatch.setattr("at_comfy.browse_sources.civitai.CivitaiClient", FakeClient)
     app = create_test_app()
     next_raw = "https://civitai.com/api/v1/models?cursor=abc"
     qstr = urllib.parse.urlencode({"url": next_raw, "q": "myterm", "search_type": "model_name"})
@@ -176,7 +186,7 @@ async def test_browse_model_enriches_versions_for_image_meta(tmp_comfy_base, mon
         async def aclose(self):
             return None
 
-    monkeypatch.setattr("at_comfy.route_handlers.CivitaiClient", FakeClient)
+    monkeypatch.setattr("at_comfy.browse_sources.civitai.CivitaiClient", FakeClient)
     app = create_test_app()
     async with TestClient(TestServer(app)) as client:
         r = await client.get("/at/browse/model/7")
