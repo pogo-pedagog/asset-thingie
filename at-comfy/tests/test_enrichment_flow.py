@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -123,6 +124,107 @@ def test_apply_civitai_skips_display_name_when_user_edited(tmp_comfy_base: Path)
     assert dn is not None
     assert dn["display_name"] == "User Title"
     assert dn["base_model"] is None
+
+
+@pytest.mark.asyncio
+async def test_enrich_civitai_ignores_hide_early_access_for_client(
+    tmp_comfy_base: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """By-hash can resolve an EA version; ``get_model`` must list it — enrichment forces EA visible."""
+    conn = get_conn()
+    p = tmp_comfy_base / "loras" / "ea_hash.safetensors"
+    p.parent.mkdir(parents=True)
+    now = "2025-01-01T00:00:00Z"
+    hx = "f" * 64
+    sp = str(p.resolve())
+    conn.execute(
+        """
+        INSERT INTO library_files (
+            path, filename, stem, sha256, content_type, family, file_size_bytes, mtime, scanned_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (sp, "ea_hash.safetensors", "ea_hash", hx, "LORA", "lora", 10, 1.0, now),
+    )
+    conn.execute(
+        """
+        INSERT INTO library_assets (
+            primary_path, display_name, content_type, family, trigger_words, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (sp, "local", "LORA", "lora", "[]", now, now),
+    )
+    aid = int(conn.execute("SELECT asset_id FROM library_assets WHERE primary_path = ?", (sp,)).fetchone()[0])
+    conn.commit()
+
+    client_kw: list[dict[str, Any]] = []
+
+    class FakeCivitai:
+        def __init__(self, **kwargs: Any) -> None:
+            client_kw.append(dict(kwargs))
+
+        async def model_version_by_hash(self, sha: str) -> dict[str, Any]:
+            assert sha == hx.upper()
+            return {"id": 20, "modelId": 100}
+
+        async def get_model(self, model_id: int, *, nsfw: bool = False) -> CivitaiModel:
+            assert model_id == 100
+            return CivitaiModel(
+                id=100,
+                name="EA Model",
+                type="LORA",
+                creator_username="c",
+                tags=[],
+                model_versions=[
+                    CivitaiModelVersion(
+                        id=20,
+                        name="ea",
+                        base_model="SD 1.5",
+                        trained_words=["ea_only"],
+                        is_early_access=True,
+                        images=[],
+                        files=[],
+                    ),
+                    CivitaiModelVersion(
+                        id=21,
+                        name="public",
+                        base_model="SD 1.5",
+                        trained_words=["public_only"],
+                        images=[],
+                        files=[],
+                    ),
+                ],
+            )
+
+        async def get_version_detail(self, version_id: int, *, nsfw: bool = False) -> CivitaiModelVersion:
+            assert version_id == 20
+            m = await self.get_model(100, nsfw=nsfw)
+            v = next(x for x in m.model_versions if x.id == version_id)
+            return v
+
+        async def aclose(self) -> None:
+            pass
+
+    monkeypatch.setattr("at_comfy.enrichment.CivitaiClient", FakeCivitai)
+
+    async def noop_gallery(**kwargs: Any) -> None:
+        pass
+
+    monkeypatch.setattr("at_comfy.enrichment._fetch_civitai_cover_and_example_gallery", noop_gallery)
+
+    svc = EnrichmentService()
+    await svc.enrich_asset(aid, ATComfyConfig(hide_early_access=True))
+
+    assert len(client_kw) == 1
+    assert client_kw[0].get("hide_early_access") is False
+    tw = conn.execute("SELECT trigger_words FROM library_assets WHERE asset_id = ?", (aid,)).fetchone()
+    assert tw is not None
+    assert json.loads(tw["trigger_words"]) == ["ea_only"]
+    sm = conn.execute(
+        "SELECT external_version_id FROM source_metadata WHERE asset_id = ?",
+        (aid,),
+    ).fetchone()
+    assert sm is not None
+    assert sm["external_version_id"] == "20"
 
 
 @pytest.mark.asyncio

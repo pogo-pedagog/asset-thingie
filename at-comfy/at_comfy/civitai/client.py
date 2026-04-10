@@ -511,7 +511,8 @@ class CivitaiClient:
 
     ``hide_early_access`` only affects download-oriented fetches (``get_model``,
     ``fetch_models_by_ids``): when True, active early-access versions are removed
-    before parsing, matching enrichment and batch download resolution.
+    before parsing (hash enrichment uses ``hide_early_access=False`` so by-hash
+    versions still match ``get_model``). Batch download resolution uses the config flag.
     """
 
     BASE_MODELS = "https://civitai.com/api/v1/models"

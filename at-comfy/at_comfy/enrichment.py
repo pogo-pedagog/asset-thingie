@@ -33,6 +33,10 @@ from at_comfy.media_processing import (
 
 logger = logging.getLogger(__name__)
 
+# Hash enrichment resolves versions via by-hash (including early access). ``get_model`` must
+# not strip EA rows or we lose the version id from the hash and may apply the wrong version.
+_ENRICHMENT_HIDE_EARLY_ACCESS = False
+
 _status: dict[str, Any] = {"pending": 0, "running": False}
 
 _batch_lock = asyncio.Lock()
@@ -201,7 +205,7 @@ class EnrichmentService:
             _status["running"] = True
             client = CivitaiClient(
                 api_key=cfg.civitai_api_key,
-                hide_early_access=cfg.hide_early_access,
+                hide_early_access=_ENRICHMENT_HIDE_EARLY_ACCESS,
             )
             try:
                 for i, r in enumerate(rows):
@@ -226,7 +230,10 @@ class EnrichmentService:
     ) -> None:
         own = client is None
         if client is None:
-            client = CivitaiClient(api_key=cfg.civitai_api_key, hide_early_access=cfg.hide_early_access)
+            client = CivitaiClient(
+                api_key=cfg.civitai_api_key,
+                hide_early_access=_ENRICHMENT_HIDE_EARLY_ACCESS,
+            )
         try:
             sha = str(row["sha256"]).strip().upper()
             raw_ver = await client.model_version_by_hash(sha)
@@ -926,7 +933,10 @@ async def apply_civitai_metadata_from_download(
             ("found", str(row["primary_path"])),
         )
         conn.commit()
-    client = CivitaiClient(api_key=cfg.civitai_api_key, hide_early_access=cfg.hide_early_access)
+    client = CivitaiClient(
+        api_key=cfg.civitai_api_key,
+        hide_early_access=_ENRICHMENT_HIDE_EARLY_ACCESS,
+    )
     try:
         await _fetch_civitai_cover_and_example_gallery(
             asset_id=asset_id,
