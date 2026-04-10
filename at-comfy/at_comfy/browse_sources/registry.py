@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from at_comfy.browse_sources.civarchive import CivArchiveBrowseSource
 from at_comfy.browse_sources.civitai import CivitaiBrowseSource
 from at_comfy.browse_sources.types import BrowseSource
 from at_comfy.config import ATComfyConfig
@@ -11,12 +12,17 @@ from at_comfy.config import ATComfyConfig
 
 def list_browse_source_manifests() -> list[dict[str, str]]:
     """Static list for ``GET /at/browse/sources`` (extend when adding sources)."""
-    return [{"id": "civitai", "label": "Civitai"}]
+    return [
+        {"id": "civitai", "label": "Civitai"},
+        {"id": "civarchive", "label": "CivArchive"},
+    ]
 
 
 def get_browse_source(source_id: str, cfg: ATComfyConfig, *, browse_limit: int) -> BrowseSource:
     if source_id == "civitai":
         return CivitaiBrowseSource(cfg, browse_limit=browse_limit)
+    if source_id == "civarchive":
+        return CivArchiveBrowseSource(cfg, browse_limit=browse_limit)
     raise KeyError(source_id)
 
 

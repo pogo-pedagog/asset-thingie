@@ -54,6 +54,7 @@ async def test_browse_sources_lists_civitai(tmp_comfy_base) -> None:
         assert r.status == 200
         data = await r.json()
         assert data["sources"][0]["id"] == "civitai"
+        assert data["sources"][1]["id"] == "civarchive"
 
 
 @pytest.mark.asyncio
