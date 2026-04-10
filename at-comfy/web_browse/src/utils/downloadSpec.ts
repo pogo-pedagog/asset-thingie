@@ -5,6 +5,7 @@ export function pickDefaultDownloadSpec(
   opts?: { skipEarlyAccessDownloads?: boolean },
 ): { modelId: number; versionId: number; fileId: number } | null {
   const skipEa = opts?.skipEarlyAccessDownloads !== false;
+  if (typeof item.id !== "number") return null;
   const vers = item.modelVersions;
   if (!vers?.length) return null;
   const v = skipEa ? vers.find((x) => !x.isEarlyAccess) : vers[0];

@@ -55,9 +55,28 @@ export interface CivitaiVersionSummary {
   isEarlyAccess?: boolean;
 }
 
+/** Optional CivArchive extras on normalized browse/detail payloads. */
+export interface BrowseSourceSections {
+  mirrors?: Array<{
+    source?: string;
+    url?: string;
+    filename?: string;
+    is_gated?: boolean;
+    is_paid?: boolean;
+    deletedAt?: unknown;
+  }>;
+  sha256?: string | null;
+  platform?: string;
+}
+
 /** One row from ``/at/browse/search`` (full Civitai model JSON). */
 export interface CivitaiBrowseItem {
-  id: number;
+  /** Civititai numeric id, or opaque string (e.g. CivArchive ``model:…:version:…``). */
+  id: number | string;
+  /** Set when this row comes from CivArchive search normalization. */
+  source?: string;
+  /** Top-level preview URL from CivArchive search hits. */
+  image_url?: string | null;
   name: string;
   type: string;
   nsfw?: boolean;
@@ -80,6 +99,10 @@ export interface CivitaiModelDetail extends CivitaiBrowseItem {
   modelVersions: CivitaiVersionSummary[];
   allowCommercialUse?: string[];
   allowNoCredit?: boolean;
+  /** Backend multi-source marker + extra sections (e.g. CivArchive mirrors). */
+  source?: string;
+  itemRef?: string;
+  sourceSections?: BrowseSourceSections;
 }
 
 export interface DownloadTaskRow {

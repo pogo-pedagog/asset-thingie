@@ -17,15 +17,13 @@ function normalizeForMatch(s: string): string {
 export function stabilizePaginationChain(opts: {
   requestedPageUrl: string | null;
   returnedNextUrl: string | null;
-  returnedItemIds: number[];
-  lastPageItemIds: number[] | null;
+  returnedItemIds: (number | string)[];
+  lastPageItemIds: (number | string)[] | null;
 }): { nextUrl: string | null; discardPage: boolean; stopReason: string | null } {
   const { requestedPageUrl, returnedNextUrl, returnedItemIds, lastPageItemIds } = opts;
-  if (
-    lastPageItemIds !== null &&
-    returnedItemIds.length === lastPageItemIds.length &&
-    returnedItemIds.every((id, i) => id === lastPageItemIds[i]!)
-  ) {
+  const ret = returnedItemIds.map((x) => String(x));
+  const last = lastPageItemIds?.map((x) => String(x)) ?? null;
+  if (last !== null && ret.length === last.length && ret.every((id, i) => id === last[i]!)) {
     return {
       nextUrl: null,
       discardPage: true,
@@ -80,7 +78,7 @@ type BrowseSlice = {
   items: CivitaiBrowseItem[];
   buffer: CivitaiBrowseItem[];
   nextPage: string | null;
-  lastPageItemIds: number[];
+  lastPageItemIds: string[];
   stoppedReason: string | null;
   selected: CivitaiModelDetail | null;
   batchIds: Set<string>;
@@ -198,8 +196,8 @@ export const useBrowseStore = defineStore("at-browse", () => {
   });
   const lastPageItemIds = computed({
     get: () => sl().lastPageItemIds,
-    set: (v: number[]) => {
-      sl().lastPageItemIds = v;
+    set: (v: (number | string)[]) => {
+      sl().lastPageItemIds = v.map((x) => String(x));
     },
   });
   const stoppedReason = computed({
@@ -260,7 +258,7 @@ export const useBrowseStore = defineStore("at-browse", () => {
     returnedNextPage: string | null,
   ): boolean {
     const s = sl();
-    const rawIds = fetchedItems.map((i) => i.id);
+    const rawIds = fetchedItems.map((i) => String(i.id));
     let dec = stabilizePaginationChain({
       requestedPageUrl: requestedUrl,
       returnedNextUrl: returnedNextPage,

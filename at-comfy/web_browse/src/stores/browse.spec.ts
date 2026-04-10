@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
 import { useBrowseStore, stabilizePaginationChain } from "./browse";
+import { browseSourceOptions } from "../sources/registry";
 
 function makeItem(id: number, name = `model-${id}`) {
   return { id, name, type: "LORA", modelVersions: [] as never[] };
@@ -34,6 +35,12 @@ describe("stabilizePaginationChain", () => {
   });
 });
 
+describe("browse sources registry", () => {
+  it("includes CivArchive", () => {
+    expect(browseSourceOptions.map((o) => o.id)).toEqual(["civitai", "civarchive"]);
+  });
+});
+
 describe("browse store", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -53,7 +60,7 @@ describe("browse store", () => {
 
   it("search resets stabilization state on reset", async () => {
     const s = useBrowseStore();
-    s.lastPageItemIds = [1, 2, 3];
+    s.lastPageItemIds = ["1", "2", "3"];
     s.stoppedReason = "old";
     stubFetchWith({
       items: [makeItem(9)],
@@ -105,7 +112,7 @@ describe("browse store", () => {
     s.items = [makeItem(1)];
     s.buffer = [];
     s.nextPage = "https://civitai.com/api/v1/models?cursor=x";
-    s.lastPageItemIds = [1];
+    s.lastPageItemIds = ["1"];
 
     await s.loadMore();
     expect(s.items.length).toBeGreaterThan(1);
@@ -134,7 +141,7 @@ describe("browse store", () => {
     const s = useBrowseStore();
     s.items = [makeItem(1)];
     s.nextPage = "https://civitai.com/api/v1/models?cursor=x";
-    s.lastPageItemIds = [1];
+    s.lastPageItemIds = ["1"];
 
     await s.loadMore();
     expect(s.nextPage).toBeNull();
@@ -150,7 +157,7 @@ describe("browse store", () => {
     const s = useBrowseStore();
     s.items = [makeItem(1), makeItem(2)];
     s.nextPage = "https://civitai.com/api/v1/models?cursor=x";
-    s.lastPageItemIds = [1, 2];
+    s.lastPageItemIds = ["1", "2"];
 
     await s.loadMore();
     expect(s.nextPage).toBeNull();
@@ -233,7 +240,7 @@ describe("browse store", () => {
     s.items = [makeItem(1)];
     s.buffer = [];
     s.nextPage = "https://civitai.com/api/v1/models?cursor=x";
-    s.lastPageItemIds = [1];
+    s.lastPageItemIds = ["1"];
 
     let resolvePage!: (v: Response) => void;
     let resolveSearch!: (v: Response) => void;
@@ -265,7 +272,7 @@ describe("browse store", () => {
     );
     await searchP;
 
-    expect(s.lastPageItemIds).toEqual([301]);
+    expect(s.lastPageItemIds).toEqual(["301"]);
     expect(s.items.map((i) => i.id)).toContain(301);
   });
 });

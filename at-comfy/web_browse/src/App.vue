@@ -6,7 +6,7 @@ import { useDownloadsStore } from "./stores/downloads";
 import * as api from "./api";
 import BrowseFilters from "./components/BrowseFilters.vue";
 import BrowseResultGrid from "./components/BrowseResultGrid.vue";
-import BrowseModelDetail from "./components/BrowseModelDetail.vue";
+import BrowseDetailHost from "./components/BrowseDetailHost.vue";
 import ConfigPanel from "./components/ConfigPanel.vue";
 import { browseSourceOptions } from "./sources/registry";
 import type { BrowseSourceId } from "./sources/types";
@@ -280,7 +280,7 @@ async function onRemoveDl(id: string): Promise<void> {
 
       <div v-if="detailLoading || selected" :key="'browse-detail-panel'" class="at-browse-app__detail-panel">
         <p v-if="detailLoading" class="at-muted">Loading model…</p>
-        <BrowseModelDetail
+        <BrowseDetailHost
           v-else-if="selected"
           :model="selected as CivitaiModelDetail"
           @close="browse.closeDetail()"

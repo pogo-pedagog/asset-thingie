@@ -8,6 +8,10 @@ export function creatorNameFromItem(item: CivitaiBrowseItem): string | null {
 }
 
 export function coverMediaFromBrowseItem(item: CivitaiBrowseItem): CivitaiImageSummary | null {
+  const top = item.image_url;
+  if (typeof top === "string" && top.trim()) {
+    return { url: top.trim(), type: "image" };
+  }
   const vers = item.modelVersions;
   if (!vers?.length) return null;
   for (const v of vers) {

@@ -177,13 +177,25 @@ async function downloadCurrent(): Promise<void> {
     return;
   }
   try {
-    await api.postDownload({
-      civitai_model_id: props.model.id,
-      version_id: spec.versionId,
-      file_id: spec.fileId,
-      category: category.value.trim() || "General",
-      duplicate_resolution: duplicateResolution.value,
-    });
+    if (props.model.source === "civarchive") {
+      const mid = typeof props.model.id === "number" ? props.model.id : Number(props.model.id);
+      await api.postDownload({
+        source: "civarchive",
+        civarchive_model_id: mid,
+        civarchive_version_id: spec.versionId,
+        civarchive_file_id: spec.fileId,
+        category: category.value.trim() || "General",
+        duplicate_resolution: duplicateResolution.value,
+      });
+    } else {
+      await api.postDownload({
+        civitai_model_id: props.model.id,
+        version_id: spec.versionId,
+        file_id: spec.fileId,
+        category: category.value.trim() || "General",
+        duplicate_resolution: duplicateResolution.value,
+      });
+    }
     emit("downloaded");
   } catch (e) {
     emit("error", e instanceof Error ? e.message : "Download failed");
@@ -200,12 +212,23 @@ async function downloadAllVersions(): Promise<void> {
     const primaryI = files.findIndex((f) => f.primary);
     const f = files[primaryI >= 0 ? primaryI : 0];
     if (!f?.id) continue;
-    items.push({
-      civitai_model_id: props.model.id,
-      version_id: v.id,
-      file_id: f.id,
-      category: category.value.trim() || "General",
-    });
+    if (props.model.source === "civarchive") {
+      const mid = typeof props.model.id === "number" ? props.model.id : Number(props.model.id);
+      items.push({
+        source: "civarchive",
+        civarchive_model_id: mid,
+        civarchive_version_id: v.id,
+        civarchive_file_id: f.id,
+        category: category.value.trim() || "General",
+      });
+    } else {
+      items.push({
+        civitai_model_id: props.model.id,
+        version_id: v.id,
+        file_id: f.id,
+        category: category.value.trim() || "General",
+      });
+    }
   }
   if (!items.length) {
     emit("error", "No downloadable files");
