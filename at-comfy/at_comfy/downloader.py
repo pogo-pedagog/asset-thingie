@@ -17,7 +17,7 @@ from at_comfy.config import ATComfyConfig, load_config
 from at_comfy.db import get_conn
 from at_comfy.download_sources.registry import prepare_download
 from at_comfy.download_store import DownloadStore, normalize_download_task_id
-from at_comfy.enrichment import apply_civitai_metadata_from_download
+from at_comfy.enrichment import apply_civarchive_catalog_to_asset, apply_civitai_metadata_from_download
 from at_comfy.models.download import (
     DownloadErrorCode,
     DownloadRequest,
@@ -289,6 +289,25 @@ class Downloader:
                                 )
                     except Exception:
                         logger.exception("register download metadata failed")
+                elif task.request.source == "civarchive":
+                    try:
+                        snap = task.request.model_json_snapshot
+                        raw = snap.get("civarchive_model") if isinstance(snap, dict) else None
+                        if isinstance(raw, dict):
+                            row_aid = get_conn().execute(
+                                "SELECT asset_id FROM library_assets WHERE primary_path = ?",
+                                (str(dest.resolve()),),
+                            ).fetchone()
+                            if row_aid:
+                                await apply_civarchive_catalog_to_asset(
+                                    asset_id=int(row_aid["asset_id"]),
+                                    raw_model=raw,
+                                    cfg=cfg,
+                                    primary_path=str(dest.resolve()),
+                                    external_file_id=str(int(task.request.file_id)),
+                                )
+                    except Exception:
+                        logger.exception("register civarchive download metadata failed")
             except Exception as e:
                 logger.exception("download failed")
                 task.state = DownloadState.FAILED

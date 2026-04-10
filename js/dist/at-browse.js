@@ -4741,14 +4741,14 @@ var ml = ["src", "poster"], hl = ["src"], gl = {
 }, ru = {
 	key: 1,
 	class: "at-muted"
-}, iu = { class: "at-label" }, au = { class: "at-label" }, ou = ["placeholder"], su = { class: "at-label at-label--row" }, cu = { class: "at-label" }, lu = { class: "at-label" }, uu = { class: "at-label" }, du = { class: "at-label" }, fu = { class: "at-label" }, pu = { class: "at-label at-label--row" }, mu = { class: "at-label at-label--row" }, hu = { class: "at-label at-label--row" }, gu = { class: "at-label at-label--row" }, _u = { class: "config-panel__actions" }, vu = ["disabled"], yu = { class: "config-panel__status" }, bu = { class: "config-panel__pre" }, xu = { class: "config-panel__pre" }, Su = /* @__PURE__ */ Kc(/* @__PURE__ */ or({
+}, iu = { class: "at-label" }, au = { class: "at-label" }, ou = ["placeholder"], su = { class: "at-label at-label--row" }, cu = { class: "at-label" }, lu = { class: "at-label" }, uu = { class: "at-label at-label--row" }, du = { class: "at-label" }, fu = { class: "at-label" }, pu = { class: "at-label" }, mu = { class: "at-label at-label--row" }, hu = { class: "at-label at-label--row" }, gu = { class: "at-label at-label--row" }, _u = { class: "at-label at-label--row" }, vu = { class: "config-panel__actions" }, yu = ["disabled"], bu = { class: "config-panel__status" }, xu = { class: "config-panel__pre" }, Su = { class: "config-panel__pre" }, Cu = /* @__PURE__ */ Kc(/* @__PURE__ */ or({
 	__name: "ConfigPanel",
 	setup(e) {
 		let t = rc(), n = /* @__PURE__ */ L(!1), r = /* @__PURE__ */ L(null), i = /* @__PURE__ */ L(null), a = /* @__PURE__ */ L(Es()), o = /* @__PURE__ */ L(""), s = /* @__PURE__ */ L(null), c = /* @__PURE__ */ L(null), l = null;
 		async function u() {
 			n.value = !0, r.value = null;
 			try {
-				i.value = await Ws(), i.value && (typeof i.value.download_example_videos != "boolean" && (i.value.download_example_videos = !1), typeof i.value.generate_video_posters != "boolean" && (i.value.generate_video_posters = !0), (typeof i.value.max_example_images != "number" || !Number.isFinite(i.value.max_example_images)) && (i.value.max_example_images = 20)), a.value = Es(), o.value = "", t.hideNsfwFromConfig = !!i.value?.hide_nsfw, t.hideEarlyAccessFromConfig = i.value?.hide_early_access !== !1, s.value = await qs(), c.value = await Ys();
+				i.value = await Ws(), i.value && (typeof i.value.download_example_videos != "boolean" && (i.value.download_example_videos = !1), typeof i.value.generate_video_posters != "boolean" && (i.value.generate_video_posters = !0), typeof i.value.enrichment_civarchive_fallback != "boolean" && (i.value.enrichment_civarchive_fallback = !0), (typeof i.value.max_example_images != "number" || !Number.isFinite(i.value.max_example_images)) && (i.value.max_example_images = 20)), a.value = Es(), o.value = "", t.hideNsfwFromConfig = !!i.value?.hide_nsfw, t.hideEarlyAccessFromConfig = i.value?.hide_early_access !== !1, s.value = await qs(), c.value = await Ys();
 			} catch (e) {
 				r.value = e instanceof Error ? e.message : "Load failed";
 			} finally {
@@ -4772,7 +4772,8 @@ var ml = ["src", "poster"], hl = ["src"], gl = {
 						hide_early_access: i.value.hide_early_access,
 						hide_nsfw: i.value.hide_nsfw,
 						download_example_videos: i.value.download_example_videos,
-						generate_video_posters: i.value.generate_video_posters
+						generate_video_posters: i.value.generate_video_posters,
+						enrichment_civarchive_fallback: i.value.enrichment_civarchive_fallback
 					};
 					o.value.trim() && (e.civitai_api_key = o.value.trim()), i.value = await Gs(e), o.value = "", t.hideNsfwFromConfig = !!i.value?.hide_nsfw, t.hideEarlyAccessFromConfig = i.value?.hide_early_access !== !1;
 				} catch (e) {
@@ -4816,19 +4817,19 @@ var ml = ["src", "poster"], hl = ["src"], gl = {
 			r.value ? (G(), K("p", nu, j(r.value), 1)) : Y("", !0),
 			n.value && !i.value ? (G(), K("p", ru, "Loading…")) : Y("", !0),
 			i.value ? (G(), K(W, { key: 2 }, [
-				q("label", iu, [t[12] ||= J(" Server URL ", -1), B(q("input", {
+				q("label", iu, [t[13] ||= J(" Server URL ", -1), B(q("input", {
 					"onUpdate:modelValue": t[0] ||= (e) => a.value = e,
 					class: "at-input",
 					type: "url",
 					autocomplete: "off"
 				}, null, 512), [[wo, a.value]])]),
-				t[27] ||= q("p", { class: "at-hint" }, [J(" Default: "), q("code", null, "http://127.0.0.1:8188")], -1),
+				t[29] ||= q("p", { class: "at-hint" }, [J(" Default: "), q("code", null, "http://127.0.0.1:8188")], -1),
 				q("button", {
 					type: "button",
 					class: "at-btn at-btn--ghost",
 					onClick: d
 				}, "Apply server URL"),
-				q("label", au, [t[13] ||= J(" Civitai API key ", -1), B(q("input", {
+				q("label", au, [t[14] ||= J(" Civitai API key ", -1), B(q("input", {
 					"onUpdate:modelValue": t[1] ||= (e) => o.value = e,
 					class: "at-input",
 					type: "password",
@@ -4838,16 +4839,16 @@ var ml = ["src", "poster"], hl = ["src"], gl = {
 				q("label", su, [B(q("input", {
 					"onUpdate:modelValue": t[2] ||= (e) => i.value.scan_on_startup = e,
 					type: "checkbox"
-				}, null, 512), [[To, i.value.scan_on_startup]]), t[14] ||= J(" Scan library on startup ", -1)]),
-				q("label", cu, [t[16] ||= J(" Enrichment mode ", -1), B(q("select", {
+				}, null, 512), [[To, i.value.scan_on_startup]]), t[15] ||= J(" Scan library on startup ", -1)]),
+				q("label", cu, [t[17] ||= J(" Enrichment mode ", -1), B(q("select", {
 					"onUpdate:modelValue": t[3] ||= (e) => i.value.enrichment_mode = e,
 					class: "at-input"
-				}, [...t[15] ||= [
+				}, [...t[16] ||= [
 					q("option", { value: "auto" }, "Auto (during scan)", -1),
 					q("option", { value: "background" }, "Background (after scan)", -1),
 					q("option", { value: "manual" }, "Manual only", -1)
 				]], 512), [[Oo, i.value.enrichment_mode]])]),
-				q("label", lu, [t[17] ||= J(" Enrichment rate limit (ms) ", -1), B(q("input", {
+				q("label", lu, [t[18] ||= J(" Enrichment rate limit (ms) ", -1), B(q("input", {
 					"onUpdate:modelValue": t[4] ||= (e) => i.value.enrichment_rate_limit_ms = e,
 					class: "at-input",
 					type: "number",
@@ -4859,8 +4860,12 @@ var ml = ["src", "poster"], hl = ["src"], gl = {
 					void 0,
 					{ number: !0 }
 				]])]),
-				q("label", uu, [t[18] ||= J(" Max example images per asset ", -1), B(q("input", {
-					"onUpdate:modelValue": t[5] ||= (e) => i.value.max_example_images = e,
+				q("label", uu, [B(q("input", {
+					"onUpdate:modelValue": t[5] ||= (e) => i.value.enrichment_civarchive_fallback = e,
+					type: "checkbox"
+				}, null, 512), [[To, i.value.enrichment_civarchive_fallback]]), t[19] ||= J(" When Civitai hash lookup misses, try CivArchive (SHA index) ", -1)]),
+				q("label", du, [t[20] ||= J(" Max example images per asset ", -1), B(q("input", {
+					"onUpdate:modelValue": t[6] ||= (e) => i.value.max_example_images = e,
 					class: "at-input",
 					type: "number",
 					min: "1",
@@ -4872,9 +4877,9 @@ var ml = ["src", "poster"], hl = ["src"], gl = {
 					void 0,
 					{ number: !0 }
 				]])]),
-				t[28] ||= q("p", { class: "at-hint" }, " Gallery stills (and video slots) to download during enrichment or after a Civitai download. Range 1–200. ", -1),
-				q("label", du, [t[19] ||= J(" Max parallel downloads ", -1), B(q("input", {
-					"onUpdate:modelValue": t[6] ||= (e) => i.value.max_parallel_downloads = e,
+				t[30] ||= q("p", { class: "at-hint" }, " Gallery stills (and video slots) to download during enrichment or after a Civitai download. Range 1–200. ", -1),
+				q("label", fu, [t[21] ||= J(" Max parallel downloads ", -1), B(q("input", {
+					"onUpdate:modelValue": t[7] ||= (e) => i.value.max_parallel_downloads = e,
 					class: "at-input",
 					type: "number",
 					min: "1",
@@ -4885,20 +4890,20 @@ var ml = ["src", "poster"], hl = ["src"], gl = {
 					void 0,
 					{ number: !0 }
 				]])]),
-				q("label", fu, [t[20] ||= J(" Download subpath template ", -1), B(q("input", {
-					"onUpdate:modelValue": t[7] ||= (e) => i.value.download_subpath_template = e,
+				q("label", pu, [t[22] ||= J(" Download subpath template ", -1), B(q("input", {
+					"onUpdate:modelValue": t[8] ||= (e) => i.value.download_subpath_template = e,
 					class: "at-input",
 					placeholder: "{category}"
 				}, null, 512), [[wo, i.value.download_subpath_template]])]),
-				q("label", pu, [B(q("input", {
-					"onUpdate:modelValue": t[8] ||= (e) => i.value.hide_early_access = e,
-					type: "checkbox"
-				}, null, 512), [[To, i.value.hide_early_access]]), t[21] ||= J(" Skip early-access downloads (Civitai) ", -1)]),
 				q("label", mu, [B(q("input", {
-					"onUpdate:modelValue": t[9] ||= (e) => i.value.hide_nsfw = e,
+					"onUpdate:modelValue": t[9] ||= (e) => i.value.hide_early_access = e,
 					type: "checkbox"
-				}, null, 512), [[To, i.value.hide_nsfw]]), t[22] ||= J(" Hide NSFW from Civitai (browse search, detail, and related API calls) ", -1)]),
-				t[29] ||= q("p", { class: "at-hint" }, [
+				}, null, 512), [[To, i.value.hide_early_access]]), t[23] ||= J(" Skip early-access downloads (Civitai) ", -1)]),
+				q("label", hu, [B(q("input", {
+					"onUpdate:modelValue": t[10] ||= (e) => i.value.hide_nsfw = e,
+					type: "checkbox"
+				}, null, 512), [[To, i.value.hide_nsfw]]), t[24] ||= J(" Hide NSFW from Civitai (browse search, detail, and related API calls) ", -1)]),
+				t[31] ||= q("p", { class: "at-hint" }, [
 					J(" CivArchive browse accumulates "),
 					q("strong", null, "base model"),
 					J(" strings from search results into SQLite. Use reset if the dropdown grows stale. ")
@@ -4908,21 +4913,21 @@ var ml = ["src", "poster"], hl = ["src"], gl = {
 					class: "at-btn at-btn--ghost",
 					onClick: h
 				}, " Reset CivArchive base model list "),
-				q("label", hu, [B(q("input", {
-					"onUpdate:modelValue": t[10] ||= (e) => i.value.download_example_videos = e,
-					type: "checkbox"
-				}, null, 512), [[To, i.value.download_example_videos]]), t[23] ||= J(" Download gallery video samples during enrichment (uses more disk; enables offline video in sidebars) ", -1)]),
 				q("label", gu, [B(q("input", {
-					"onUpdate:modelValue": t[11] ||= (e) => i.value.generate_video_posters = e,
+					"onUpdate:modelValue": t[11] ||= (e) => i.value.download_example_videos = e,
 					type: "checkbox"
-				}, null, 512), [[To, i.value.generate_video_posters]]), t[24] ||= J(" Generate JPEG poster frames for video samples (uses ffmpeg when available; still images work without it) ", -1)]),
-				q("div", _u, [
+				}, null, 512), [[To, i.value.download_example_videos]]), t[25] ||= J(" Download gallery video samples during enrichment (uses more disk; enables offline video in sidebars) ", -1)]),
+				q("label", _u, [B(q("input", {
+					"onUpdate:modelValue": t[12] ||= (e) => i.value.generate_video_posters = e,
+					type: "checkbox"
+				}, null, 512), [[To, i.value.generate_video_posters]]), t[26] ||= J(" Generate JPEG poster frames for video samples (uses ffmpeg when available; still images work without it) ", -1)]),
+				q("div", vu, [
 					q("button", {
 						type: "button",
 						class: "at-btn",
 						disabled: n.value,
 						onClick: f
-					}, "Save settings", 8, vu),
+					}, "Save settings", 8, yu),
 					q("button", {
 						type: "button",
 						class: "at-btn",
@@ -4939,16 +4944,16 @@ var ml = ["src", "poster"], hl = ["src"], gl = {
 						onClick: u
 					}, "Reload")
 				]),
-				q("div", yu, [
-					t[25] ||= q("h4", null, "Scan", -1),
-					q("pre", bu, j(JSON.stringify(s.value, null, 2)), 1),
-					t[26] ||= q("h4", null, "Enrichment", -1),
-					q("pre", xu, j(JSON.stringify(c.value, null, 2)), 1)
+				q("div", bu, [
+					t[27] ||= q("h4", null, "Scan", -1),
+					q("pre", xu, j(JSON.stringify(s.value, null, 2)), 1),
+					t[28] ||= q("h4", null, "Enrichment", -1),
+					q("pre", Su, j(JSON.stringify(c.value, null, 2)), 1)
 				])
 			], 64)) : Y("", !0)
 		]));
 	}
-}), [["__scopeId", "data-v-74de5d99"]]), Cu = {
+}), [["__scopeId", "data-v-d79cf8df"]]), wu = {
 	id: "civarchive",
 	label: "CivArchive",
 	defaultSearchState: {
@@ -4965,16 +4970,16 @@ var ml = ["src", "poster"], hl = ["src"], gl = {
 			"user"
 		]
 	}]
-}, wu = [{
+}, Tu = [{
 	id: "civitai",
 	label: "Civitai"
 }, {
-	id: Cu.id,
-	label: Cu.label
+	id: wu.id,
+	label: wu.label
 }];
 //#endregion
 //#region src/utils/downloadSpec.ts
-function Tu(e, t) {
+function Eu(e, t) {
 	let n = t?.skipEarlyAccessDownloads !== !1;
 	if (typeof e.id != "number") return null;
 	let r = e.modelVersions;
@@ -4992,48 +4997,48 @@ function Tu(e, t) {
 }
 //#endregion
 //#region src/App.vue?vue&type=script&setup=true&lang.ts
-var Eu = { class: "at-browse-app" }, Du = { class: "at-browse-app__tabs" }, Ou = {
+var Du = { class: "at-browse-app" }, Ou = { class: "at-browse-app__tabs" }, ku = {
 	key: 0,
 	class: "at-browse-app__panel at-browse-app__panel--browse"
-}, ku = { class: "at-browse-app__browse-chrome" }, Au = { class: "at-browse-app__search" }, ju = ["value"], Mu = ["value"], Nu = ["placeholder"], Pu = ["disabled"], Fu = {
+}, Au = { class: "at-browse-app__browse-chrome" }, ju = { class: "at-browse-app__search" }, Mu = ["value"], Nu = ["value"], Pu = ["placeholder"], Fu = ["disabled"], Iu = {
 	key: "browse-batch-bar",
 	class: "at-batch-bar"
-}, Iu = {
+}, Lu = {
 	key: "browse-search-error",
 	class: "at-err"
-}, Lu = {
+}, Ru = {
 	key: "browse-detail-panel",
 	class: "at-browse-app__detail-panel"
-}, Ru = {
-	key: 0,
-	class: "at-muted"
 }, zu = {
 	key: 0,
 	class: "at-muted"
 }, Bu = {
-	key: 1,
+	key: 0,
 	class: "at-muted"
 }, Vu = {
 	key: 1,
-	class: "at-browse-app__panel"
+	class: "at-muted"
 }, Hu = {
+	key: 1,
+	class: "at-browse-app__panel"
+}, Uu = {
 	key: 0,
 	class: "at-err"
-}, Uu = { class: "at-dl-list" }, Wu = { class: "at-dl__row" }, Gu = ["src"], Ku = { class: "at-dl__main" }, qu = { class: "at-dl__title" }, Ju = {
+}, Wu = { class: "at-dl-list" }, Gu = { class: "at-dl__row" }, Ku = ["src"], qu = { class: "at-dl__main" }, Ju = { class: "at-dl__title" }, Yu = {
 	key: 0,
 	class: "at-dl__err"
-}, Yu = {
+}, Xu = {
 	key: 1,
 	class: "at-dl__bar"
-}, Xu = { class: "at-dl__actions" }, Zu = ["onClick"], Qu = ["onClick"], $u = ["onClick"], ed = ["onClick"], td = {
+}, Zu = { class: "at-dl__actions" }, Qu = ["onClick"], $u = ["onClick"], ed = ["onClick"], td = ["onClick"], nd = {
 	key: 2,
 	class: "at-browse-app__panel at-browse-app__panel--scroll"
-}, nd = 200, rd = /* @__PURE__ */ Kc(/* @__PURE__ */ or({
+}, rd = 200, id = /* @__PURE__ */ Kc(/* @__PURE__ */ or({
 	__name: "App",
 	setup(e) {
 		let t = rc(), n = cc(), { items: r, loading: i, fetching: a, error: o, q: s, selected: c, detailLoading: l, batchMode: u, batchIds: d, duplicateResolution: f, hasMore: p, stoppedReason: m } = Ss(t), { tasks: h, activeTab: g } = Ss(n), _ = /* @__PURE__ */ L(null);
 		function v(e) {
-			return e.scrollHeight - e.scrollTop - e.clientHeight <= nd;
+			return e.scrollHeight - e.scrollTop - e.clientHeight <= rd;
 		}
 		function y() {
 			let e = _.value;
@@ -5095,7 +5100,7 @@ var Eu = { class: "at-browse-app" }, Du = { class: "at-browse-app__tabs" }, Ou =
 			for (let n of d.value) {
 				let i = r.value.find((e) => String(e.id) === n);
 				if (!i) continue;
-				let a = Tu(i, { skipEarlyAccessDownloads: t.hideEarlyAccessFromConfig });
+				let a = Eu(i, { skipEarlyAccessDownloads: t.hideEarlyAccessFromConfig });
 				a && e.push({
 					civitai_model_id: a.modelId,
 					version_id: a.versionId,
@@ -5159,7 +5164,7 @@ var Eu = { class: "at-browse-app" }, Du = { class: "at-browse-app__tabs" }, Ou =
 				k(e instanceof Error ? e.message : "Remove failed");
 			}
 		}
-		return (e, r) => (G(), K("div", Eu, [q("header", Du, [
+		return (e, r) => (G(), K("div", Du, [q("header", Ou, [
 			q("button", {
 				type: "button",
 				class: A({ active: R(g) === "browse" }),
@@ -5177,30 +5182,30 @@ var Eu = { class: "at-browse-app" }, Du = { class: "at-browse-app__tabs" }, Ou =
 				"aria-label": "Settings",
 				onClick: r[2] ||= (e) => T("settings")
 			}, " ⚙ ", 2)
-		]), R(g) === "browse" ? (G(), K("div", Ou, [
-			q("div", ku, [
-				q("div", Au, [
+		]), R(g) === "browse" ? (G(), K("div", ku, [
+			q("div", Au, [
+				q("div", ju, [
 					q("select", {
 						class: "at-input at-browse-app__source-select",
 						"aria-label": "Browse source",
 						value: R(t).activeSource,
 						onChange: ne
-					}, [(G(!0), K(W, null, V(R(wu), (e) => (G(), K("option", {
+					}, [(G(!0), K(W, null, V(R(Tu), (e) => (G(), K("option", {
 						key: e.id,
 						value: e.id
-					}, j(e.label), 9, Mu))), 128))], 40, ju),
+					}, j(e.label), 9, Nu))), 128))], 40, Mu),
 					B(q("input", {
 						"onUpdate:modelValue": r[3] ||= (e) => /* @__PURE__ */ I(s) ? s.value = e : null,
 						class: "at-input",
 						placeholder: E.value,
 						onKeyup: Io(w, ["enter"])
-					}, null, 40, Nu), [[wo, R(s)]]),
+					}, null, 40, Pu), [[wo, R(s)]]),
 					q("button", {
 						type: "button",
 						class: "at-btn",
 						disabled: R(i),
 						onClick: w
-					}, "Search", 8, Pu),
+					}, "Search", 8, Fu),
 					q("button", {
 						type: "button",
 						class: A(["at-btn", { "at-btn--on": R(u) }]),
@@ -5208,7 +5213,7 @@ var Eu = { class: "at-browse-app" }, Du = { class: "at-browse-app__tabs" }, Ou =
 					}, j(R(u) ? "Exit batch" : "Batch select"), 3)
 				]),
 				na(qc),
-				R(u) && R(d).size ? (G(), K("div", Fu, [
+				R(u) && R(d).size ? (G(), K("div", Iu, [
 					q("span", null, j(R(d).size) + " selected", 1),
 					q("button", {
 						type: "button",
@@ -5221,9 +5226,9 @@ var Eu = { class: "at-browse-app" }, Du = { class: "at-browse-app__tabs" }, Ou =
 						onClick: r[5] ||= (...e) => R(t).clearBatch && R(t).clearBatch(...e)
 					}, "Clear")
 				])) : Y("", !0),
-				R(o) ? (G(), K("p", Iu, j(R(o)), 1)) : Y("", !0)
+				R(o) ? (G(), K("p", Lu, j(R(o)), 1)) : Y("", !0)
 			]),
-			R(l) || R(c) ? (G(), K("div", Lu, [R(l) ? (G(), K("p", Ru, "Loading model…")) : R(c) ? (G(), Zi(eu, {
+			R(l) || R(c) ? (G(), K("div", Ru, [R(l) ? (G(), K("p", zu, "Loading model…")) : R(c) ? (G(), Zi(eu, {
 				key: 1,
 				model: R(c),
 				onClose: r[6] ||= (e) => R(t).closeDetail(),
@@ -5236,57 +5241,57 @@ var Eu = { class: "at-browse-app" }, Du = { class: "at-browse-app__tabs" }, Ou =
 				class: "at-browse-app__browse-scroll"
 			}, [
 				na(fl),
-				R(a) ? (G(), K("p", zu, "Loading more…")) : Y("", !0),
-				R(m) && !R(a) ? (G(), K("p", Bu, j(R(m)), 1)) : Y("", !0)
+				R(a) ? (G(), K("p", Bu, "Loading more…")) : Y("", !0),
+				R(m) && !R(a) ? (G(), K("p", Vu, j(R(m)), 1)) : Y("", !0)
 			], 512)
-		])) : R(g) === "downloads" ? (G(), K("div", Vu, [R(n).error ? (G(), K("p", Hu, j(R(n).error), 1)) : Y("", !0), q("ul", Uu, [(G(!0), K(W, null, V(R(h), (e) => (G(), K("li", {
+		])) : R(g) === "downloads" ? (G(), K("div", Hu, [R(n).error ? (G(), K("p", Uu, j(R(n).error), 1)) : Y("", !0), q("ul", Wu, [(G(!0), K(W, null, V(R(h), (e) => (G(), K("li", {
 			key: e.id,
 			class: "at-dl"
-		}, [q("div", Wu, [Xs(e.cover_thumb_url) ? (G(), K("img", {
+		}, [q("div", Gu, [Xs(e.cover_thumb_url) ? (G(), K("img", {
 			key: 0,
 			class: "at-dl__thumb",
 			src: Xs(e.cover_thumb_url),
 			alt: ""
-		}, null, 8, Gu)) : Y("", !0), q("div", Ku, [
-			q("div", qu, j(e.display_name || e.filename) + " — " + j(e.state), 1),
-			e.error_message ? (G(), K("div", Ju, j(e.error_message), 1)) : Y("", !0),
-			e.total_bytes ? (G(), K("div", Yu, [q("div", {
+		}, null, 8, Ku)) : Y("", !0), q("div", qu, [
+			q("div", Ju, j(e.display_name || e.filename) + " — " + j(e.state), 1),
+			e.error_message ? (G(), K("div", Yu, j(e.error_message), 1)) : Y("", !0),
+			e.total_bytes ? (G(), K("div", Xu, [q("div", {
 				class: "at-dl__fill",
 				style: le({ width: `${Math.min(100, Math.round(100 * e.bytes_done / (e.total_bytes || 1)))}%` })
 			}, null, 4)])) : Y("", !0)
-		])]), q("div", Xu, [
+		])]), q("div", Zu, [
 			re(e.state) ? (G(), K("button", {
 				key: 0,
 				type: "button",
 				class: "at-btn at-btn--sm",
 				onClick: (t) => se(e.id)
-			}, "Cancel", 8, Zu)) : Y("", !0),
+			}, "Cancel", 8, Qu)) : Y("", !0),
 			ie(e.state) ? (G(), K("button", {
 				key: 1,
 				type: "button",
 				class: "at-btn at-btn--sm",
 				onClick: (t) => oe(e.id)
-			}, "Pause", 8, Qu)) : Y("", !0),
+			}, "Pause", 8, $u)) : Y("", !0),
 			O(e.state) ? (G(), K("button", {
 				key: 2,
 				type: "button",
 				class: "at-btn at-btn--sm",
 				onClick: (t) => ce(e.id)
-			}, "Retry", 8, $u)) : Y("", !0),
+			}, "Retry", 8, ed)) : Y("", !0),
 			ae(e.state) ? (G(), K("button", {
 				key: 3,
 				type: "button",
 				class: "at-btn at-btn--sm",
 				onClick: (t) => ue(e.id)
-			}, "Remove", 8, ed)) : Y("", !0)
-		])]))), 128))])])) : (G(), K("div", td, [na(Su)]))]));
+			}, "Remove", 8, td)) : Y("", !0)
+		])]))), 128))])])) : (G(), K("div", nd, [na(Cu)]))]));
 	}
 }), [["__scopeId", "data-v-2a6aa553"]]);
 //#endregion
 //#region src/main.ts
-function id(e) {
-	let t = ss(), n = Bo(rd);
+function ad(e) {
+	let t = ss(), n = Bo(id);
 	return n.use(t), n.mount(e), n;
 }
 //#endregion
-export { id as mount };
+export { ad as mount };

@@ -20,6 +20,8 @@ from at_comfy.civitai.client import (
     civitai_image_url_with_width,
 )
 from at_comfy.civitai.models import CivitaiModel, CivitaiModelVersion
+from at_comfy.civarchive_client import CivArchiveClient
+from at_comfy.civarchive_payload import civarchive_mid_vid_from_sha_payload, normalize_civarchive_detail
 from at_comfy.config import cache_root, clamp_max_example_images
 from at_comfy.db import get_conn
 from at_comfy.media_processing import (
@@ -231,6 +233,9 @@ class EnrichmentService:
             asset_id = int(row["asset_id"])
             conn = get_conn()
             if raw_ver is None:
+                if getattr(cfg, "enrichment_civarchive_fallback", True):
+                    if await self._try_enrich_from_civarchive(sha, row, cfg, asset_id):
+                        return
                 conn.execute(
                     "UPDATE library_files SET enrichment_status = ? WHERE path = ?",
                     ("not_found", str(row["path"])),
@@ -254,10 +259,48 @@ class EnrichmentService:
                 ver=ver_obj,
                 cfg=cfg,
                 client=client,
+                rich_gallery=True,
             )
         finally:
             if own:
                 await client.aclose()
+
+    async def _try_enrich_from_civarchive(
+        self,
+        sha_hex: str,
+        row: dict[str, Any],
+        cfg: Any,
+        asset_id: int,
+    ) -> bool:
+        """Resolve metadata via CivArchive when Civitai hash lookup returns nothing."""
+        ca = CivArchiveClient()
+        try:
+            try:
+                data = await ca.get_by_sha256(sha_hex.lower())
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 404:
+                    return False
+                logger.debug("civarchive sha256 lookup HTTP error: %s", e)
+                return False
+            except httpx.RequestError as e:
+                logger.debug("civarchive sha256 lookup request error: %s", e)
+                return False
+            try:
+                mid, vid = civarchive_mid_vid_from_sha_payload(data)
+                raw_model = await ca.get_model(mid, vid)
+            except (ValueError, httpx.HTTPStatusError, httpx.RequestError) as e:
+                logger.debug("civarchive model fetch failed: %s", e)
+                return False
+        finally:
+            await ca.aclose()
+
+        return await apply_civarchive_catalog_to_asset(
+            asset_id=asset_id,
+            raw_model=raw_model,
+            cfg=cfg,
+            primary_path=str(row["path"]),
+            external_file_id=None,
+        )
 
     def _apply_civitai_db(
         self,
@@ -266,6 +309,10 @@ class EnrichmentService:
         asset_id: int,
         *,
         ver: CivitaiModelVersion | None = None,
+        source: str = "civitai",
+        source_url: str | None = None,
+        raw_snapshot: dict[str, Any] | None = None,
+        external_file_id: str | None = None,
     ) -> None:
         vobj = ver
         if vobj is None:
@@ -278,15 +325,23 @@ class EnrichmentService:
         conn = get_conn()
         title = model.name
         desc = model.description
+        snap: dict[str, Any] = (
+            raw_snapshot
+            if raw_snapshot is not None
+            else {"model": model.model_dump(mode="json"), "version": raw_ver}
+        )
+        url = source_url if source_url is not None else f"https://civitai.com/models/{model.id}"
         conn.execute(
             """
             INSERT INTO source_metadata (
                 asset_id, source, external_model_id, external_version_id, external_file_id,
                 creator_name, source_url, title, description_html, raw_snapshot_json, fetched_at
-            ) VALUES (?, 'civitai', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(asset_id) DO UPDATE SET
+                source = excluded.source,
                 external_model_id = excluded.external_model_id,
                 external_version_id = excluded.external_version_id,
+                external_file_id = excluded.external_file_id,
                 creator_name = excluded.creator_name,
                 source_url = excluded.source_url,
                 title = excluded.title,
@@ -296,14 +351,15 @@ class EnrichmentService:
             """,
             (
                 asset_id,
+                source,
                 str(model.id),
                 str(raw_ver.get("id")) if raw_ver.get("id") is not None else None,
-                None,
+                external_file_id,
                 model.creator_username,
-                f"https://civitai.com/models/{model.id}",
+                url,
                 title,
                 desc,
-                json.dumps({"model": model.model_dump(mode="json"), "version": raw_ver})[:500000],
+                json.dumps(snap)[:500000],
                 now,
             ),
         )
@@ -766,18 +822,87 @@ async def _fetch_civitai_cover_and_example_gallery(
     model: CivitaiModel,
     ver: CivitaiModelVersion | None,
     cfg: Any,
-    client: CivitaiClient,
+    client: CivitaiClient | None,
+    rich_gallery: bool = True,
 ) -> None:
     """Version gallery detail + cover + examples — shared by hash enrichment and post-download."""
-    ver_gallery = await _version_with_rich_image_meta(client, ver, nsfw=not cfg.hide_nsfw)
-    await _fetch_cover(asset_id, model, cfg, ver=ver)
+    ver_gallery: CivitaiModelVersion | None = ver
+    if rich_gallery and client is not None:
+        ver_gallery = await _version_with_rich_image_meta(client, ver, nsfw=not cfg.hide_nsfw) or ver
+    v_final = ver_gallery or ver
+    await _fetch_cover(asset_id, model, cfg, ver=v_final)
     await _fetch_example_media(
         asset_id,
-        ver_gallery or ver,
+        v_final,
         cfg,
         model=model,
         max_items=_max_example_gallery_items(cfg),
     )
+
+
+async def apply_civarchive_catalog_to_asset(
+    *,
+    asset_id: int,
+    raw_model: dict[str, Any],
+    cfg: Any,
+    primary_path: str | None = None,
+    external_file_id: str | None = None,
+) -> bool:
+    """Apply CivArchive ``get_model`` JSON — same normalize / DB / gallery path as hash enrichment."""
+    try:
+        normalized = normalize_civarchive_detail(raw_model)
+        full = CivitaiModel.from_api(normalized)
+    except Exception as e:
+        logger.debug("civarchive catalog parse failed: %s", e)
+        return False
+
+    ver_obj = full.model_versions[0] if full.model_versions else None
+    if ver_obj is None:
+        return False
+    raw_ver = ver_obj.model_dump(mode="json", by_alias=True)
+    mid = int(full.id)
+    vid = int(ver_obj.id)
+    source_url = f"https://civarchive.com/models/{mid}?modelVersionId={vid}"
+    raw_snapshot: dict[str, Any] = {
+        "civarchive_model_response": raw_model,
+        "normalized": normalized,
+        "model": full.model_dump(mode="json"),
+        "version": raw_ver,
+    }
+    svc = EnrichmentService()
+    svc._apply_civitai_db(
+        full,
+        raw_ver,
+        asset_id,
+        ver=ver_obj,
+        source="civarchive",
+        source_url=source_url,
+        raw_snapshot=raw_snapshot,
+        external_file_id=external_file_id,
+    )
+    conn = get_conn()
+    path = primary_path
+    if path is None:
+        pr = conn.execute(
+            "SELECT primary_path FROM library_assets WHERE asset_id = ?",
+            (asset_id,),
+        ).fetchone()
+        path = str(pr["primary_path"]) if pr else None
+    if path:
+        conn.execute(
+            "UPDATE library_files SET enrichment_status = ? WHERE path = ?",
+            ("found", path),
+        )
+        conn.commit()
+    await _fetch_civitai_cover_and_example_gallery(
+        asset_id=asset_id,
+        model=full,
+        ver=ver_obj,
+        cfg=cfg,
+        client=None,
+        rich_gallery=False,
+    )
+    return True
 
 
 async def apply_civitai_metadata_from_download(
@@ -809,6 +934,7 @@ async def apply_civitai_metadata_from_download(
             ver=ver,
             cfg=cfg,
             client=client,
+            rich_gallery=True,
         )
     finally:
         await client.aclose()

@@ -152,5 +152,6 @@ export interface AtComfyPublicConfig {
   hide_nsfw: boolean;
   download_example_videos: boolean;
   generate_video_posters: boolean;
+  enrichment_civarchive_fallback: boolean;
   scan_directories: Record<string, string | null>;
 }
