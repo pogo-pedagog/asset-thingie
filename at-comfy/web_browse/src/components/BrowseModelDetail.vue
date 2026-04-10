@@ -12,29 +12,94 @@ const props = defineProps<{
   model: CivitaiModelDetail;
 }>();
 
+function defaultVersionIndex(vers: CivitaiVersionSummary[], skipEa: boolean): number {
+  if (!skipEa) return 0;
+  const i = vers.findIndex((v) => !v.isEarlyAccess);
+  return i >= 0 ? i : 0;
+}
+
+function versionOptionLabel(v: CivitaiVersionSummary): string {
+  const base = v.name?.trim() || `v${v.id}`;
+  return v.isEarlyAccess ? `${base} (ea.)` : base;
+}
+
+function formatFileSizeKb(kb: number | null | undefined): string {
+  if (kb == null || !Number.isFinite(kb) || kb < 0) return "";
+  if (kb >= 1048576) return `${(kb / 1048576).toFixed(1)} GB`;
+  if (kb >= 1024) return `${(kb / 1024).toFixed(1)} MB`;
+  return `${Math.round(kb)} KB`;
+}
+
+/** Civitai often uses ``type: Model`` for both pruned and full; ``metadata.size`` is ``pruned`` / ``full``. */
+function fileRoleLabel(f: CivitaiFileSummary): string {
+  const meta = f.metadata;
+  const sizeRaw = meta && typeof meta === "object" && "size" in meta ? (meta as Record<string, unknown>).size : null;
+  const fpRaw = meta && typeof meta === "object" && "fp" in meta ? (meta as Record<string, unknown>).fp : null;
+  const size = typeof sizeRaw === "string" ? sizeRaw.trim().toLowerCase() : "";
+  const fp = typeof fpRaw === "string" ? fpRaw.trim() : "";
+  const typ = f.type?.trim() || "";
+
+  if (size === "pruned") {
+    return fp ? `Pruned Model · ${fp}` : "Pruned Model";
+  }
+  if (size === "full") {
+    return fp ? `Full Model · ${fp}` : "Full Model";
+  }
+
+  return typ || "Model";
+}
+
+/** Role from ``type`` and/or ``metadata``; ``sizeKB`` when present; trailing ``*`` = primary. */
+function fileSelectLabel(f: CivitaiFileSummary): string {
+  const name = f.name?.trim() || `file #${f.id}`;
+  const role = fileRoleLabel(f);
+  let label = `${name} (${role})`;
+  const size = formatFileSizeKb(f.sizeKB);
+  if (size) label = `${label} · ${size}`;
+  if (f.primary) label = `${label} *`;
+  return label;
+}
+
 const emit = defineEmits<{
   close: [];
   downloaded: [];
   error: [msg: string];
 }>();
 
-const { category, duplicateResolution } = storeToRefs(useBrowseStore());
+const { category, duplicateResolution, hideEarlyAccessFromConfig } = storeToRefs(useBrowseStore());
 
 const versionIndex = ref(0);
 const fileIndex = ref(0);
 const descExpanded = ref(false);
 const lightboxUrl = ref<string | null>(null);
+const lightboxPlaybackUrl = ref<string | null>(null);
+const lightboxPosterUrl = ref<string | null>(null);
+const lightboxMediaType = ref<string | null>(null);
 const lightboxMeta = ref<Record<string, unknown> | null>(null);
 
 const versions = computed(() => props.model.modelVersions ?? []);
 
+const downloadableVersionCount = computed(() => {
+  const skipEa = hideEarlyAccessFromConfig.value;
+  return versions.value.filter((v) => {
+    if (skipEa && v.isEarlyAccess) return false;
+    return Boolean(v.files?.length);
+  }).length;
+});
+
 watch(
-  () => props.model.id,
+  () => [props.model.id, hideEarlyAccessFromConfig.value] as const,
   () => {
-    versionIndex.value = 0;
+    versionIndex.value = defaultVersionIndex(
+      props.model.modelVersions ?? [],
+      hideEarlyAccessFromConfig.value,
+    );
     fileIndex.value = 0;
     descExpanded.value = false;
     lightboxUrl.value = null;
+    lightboxPlaybackUrl.value = null;
+    lightboxPosterUrl.value = null;
+    lightboxMediaType.value = null;
     lightboxMeta.value = null;
   },
 );
@@ -43,6 +108,11 @@ const currentVersion = computed((): CivitaiVersionSummary | null => {
   const v = versions.value[versionIndex.value];
   return v ?? null;
 });
+
+const currentVersionIsEarlyAccess = computed(
+  () =>
+    hideEarlyAccessFromConfig.value && Boolean(currentVersion.value?.isEarlyAccess),
+);
 
 const currentFiles = computed((): CivitaiFileSummary[] => currentVersion.value?.files ?? []);
 
@@ -100,6 +170,7 @@ function pickFileForDownload(): { versionId: number; fileId: number } | null {
 }
 
 async function downloadCurrent(): Promise<void> {
+  if (currentVersionIsEarlyAccess.value) return;
   const spec = pickFileForDownload();
   if (!spec) {
     emit("error", "No file on this version");
@@ -121,7 +192,9 @@ async function downloadCurrent(): Promise<void> {
 
 async function downloadAllVersions(): Promise<void> {
   const items: Record<string, unknown>[] = [];
+  const skipEa = hideEarlyAccessFromConfig.value;
   for (const v of versions.value) {
+    if (skipEa && v.isEarlyAccess) continue;
     const files = v.files ?? [];
     if (!files.length) continue;
     const primaryI = files.findIndex((f) => f.primary);
@@ -146,13 +219,43 @@ async function downloadAllVersions(): Promise<void> {
   }
 }
 
-function openLightbox(url: string, meta: Record<string, unknown> | null): void {
-  lightboxUrl.value = url;
-  lightboxMeta.value = meta;
+function openLightbox(im: CivitaiImageSummary): void {
+  const t = (im.type || "image").toLowerCase();
+  lightboxMediaType.value = t;
+  if (t === "video") {
+    lightboxPlaybackUrl.value = im.url;
+    lightboxPosterUrl.value = null;
+    lightboxUrl.value = null;
+  } else {
+    lightboxPlaybackUrl.value = null;
+    lightboxPosterUrl.value = null;
+    lightboxUrl.value = thumbUrl(im.url);
+  }
+  const m = im.meta;
+  lightboxMeta.value =
+    m && typeof m === "object" && Object.keys(m as object).length
+      ? (m as Record<string, unknown>)
+      : null;
+}
+
+function playThumbPreview(e: MouseEvent): void {
+  const el = (e.currentTarget as HTMLElement | null)?.querySelector("video");
+  if (el instanceof HTMLVideoElement) void el.play().catch(() => {});
+}
+
+function stopThumbPreview(e: MouseEvent): void {
+  const el = (e.currentTarget as HTMLElement | null)?.querySelector("video");
+  if (el instanceof HTMLVideoElement) {
+    el.pause();
+    el.currentTime = 0;
+  }
 }
 
 function closeLightbox(): void {
   lightboxUrl.value = null;
+  lightboxPlaybackUrl.value = null;
+  lightboxPosterUrl.value = null;
+  lightboxMediaType.value = null;
   lightboxMeta.value = null;
 }
 
@@ -177,7 +280,7 @@ const description = computed(() => props.model.description?.trim() || "");
         Version
         <select v-model.number="versionIndex" class="at-input">
           <option v-for="(v, i) in versions" :key="v.id" :value="i">
-            {{ v.name || `v${v.id}` }}
+            {{ versionOptionLabel(v) }}
           </option>
         </select>
       </label>
@@ -185,7 +288,7 @@ const description = computed(() => props.model.description?.trim() || "");
         File
         <select v-model.number="fileIndex" class="at-input">
           <option v-for="(f, i) in currentFiles" :key="f.id" :value="i">
-            {{ f.name }} {{ f.primary ? "(primary)" : "" }}
+            {{ fileSelectLabel(f) }}
           </option>
         </select>
       </label>
@@ -218,10 +321,22 @@ const description = computed(() => props.model.description?.trim() || "");
           :key="idx"
           type="button"
           class="model-detail__thumb"
-          @click="openLightbox(im.url, (im.meta as Record<string, unknown>) ?? null)"
+          @mouseenter="(im.type || 'image').toLowerCase() === 'video' ? playThumbPreview($event) : undefined"
+          @mouseleave="(im.type || 'image').toLowerCase() === 'video' ? stopThumbPreview($event) : undefined"
+          @click="openLightbox(im)"
         >
-          <img v-if="(im.type || 'image').toLowerCase() !== 'video'" :src="thumbUrl(im.url)" :alt="`Image ${idx}`" loading="lazy" />
-          <span v-else class="model-detail__vid">Video</span>
+          <template v-if="(im.type || 'image').toLowerCase() === 'video'">
+            <video
+              class="model-detail__thumb-vid"
+              :src="im.url"
+              muted
+              loop
+              playsinline
+              preload="metadata"
+            />
+            <span class="model-detail__vid">Video</span>
+          </template>
+          <img v-else :src="thumbUrl(im.url)" :alt="`Image ${idx}`" loading="lazy" />
         </button>
       </div>
     </div>
@@ -247,13 +362,32 @@ const description = computed(() => props.model.description?.trim() || "");
         <label><input v-model="duplicateResolution" type="radio" value="skip" /> Skip if exists</label>
         <label><input v-model="duplicateResolution" type="radio" value="replace" /> Replace</label>
       </fieldset>
+      <p v-if="currentVersionIsEarlyAccess" class="model-detail__ea-dl-msg" role="status">
+        Early-access version — not downloadable here.
+      </p>
       <div class="model-detail__dl-btns">
-        <button type="button" class="at-btn" @click="downloadCurrent">Download</button>
-        <button v-if="versions.length > 1" type="button" class="at-btn" @click="downloadAllVersions">Download all versions</button>
+        <button v-if="!currentVersionIsEarlyAccess" type="button" class="at-btn" @click="downloadCurrent">
+          Download
+        </button>
+        <button
+          v-if="downloadableVersionCount > 1"
+          type="button"
+          class="at-btn"
+          @click="downloadAllVersions"
+        >
+          Download all versions
+        </button>
       </div>
     </div>
 
-    <ImageMetaLightbox :image-url="lightboxUrl" :meta="lightboxMeta" @close="closeLightbox" />
+    <ImageMetaLightbox
+      :image-url="lightboxUrl"
+      :playback-url="lightboxPlaybackUrl"
+      :poster-url="lightboxPosterUrl"
+      :media-type="lightboxMediaType"
+      :meta="lightboxMeta"
+      @close="closeLightbox"
+    />
   </div>
 </template>
 
@@ -289,6 +423,11 @@ const description = computed(() => props.model.description?.trim() || "");
   border-radius: 4px;
   background: color-mix(in srgb, var(--fg-color, #888) 12%, transparent);
   font-size: 0.75rem;
+}
+.model-detail__ea-dl-msg {
+  margin: 0;
+  font-size: 0.8rem;
+  opacity: 0.9;
 }
 .model-detail__controls {
   display: flex;
@@ -368,6 +507,7 @@ const description = computed(() => props.model.description?.trim() || "");
   gap: 0.35rem;
 }
 .model-detail__thumb {
+  position: relative;
   padding: 0;
   border: 1px solid color-mix(in srgb, var(--fg-color, #888) 20%, transparent);
   border-radius: 4px;
@@ -377,17 +517,24 @@ const description = computed(() => props.model.description?.trim() || "");
   width: 64px;
   height: 64px;
 }
-.model-detail__thumb img {
+.model-detail__thumb img,
+.model-detail__thumb-vid {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
 .model-detail__vid {
+  position: absolute;
+  right: 0.25rem;
+  bottom: 0.25rem;
   font-size: 0.65rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
+  line-height: 1;
+  padding: 0.15rem 0.3rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  pointer-events: none;
 }
 .model-detail__dup {
   border: 1px solid color-mix(in srgb, var(--fg-color, #888) 15%, transparent);

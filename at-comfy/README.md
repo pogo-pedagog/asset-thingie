@@ -39,8 +39,10 @@ Config file: `<ComfyUI base>/at_comfy_config.json`
 | `enrichment_mode` | `"background"` | `auto`, `background`, or `manual` |
 | `enrichment_rate_limit_ms` | `500` | Minimum delay between CivitAI API calls |
 | `max_parallel_downloads` | `2` | Concurrent download limit |
-| `hide_early_access` | `true` | Hide early-access models in browse results |
+| `hide_early_access` | `true` | Browse **search/grid** lists all versions (EA rows marked ``isEarlyAccess``). When on, **batch default** and the download worker only resolve **non–early-access** files; **model detail** blocks download until you pick a public version. Turn off to allow EA targets in batch/downloads (still subject to Civitai / your API key). |
 | `hide_nsfw` | `true` | Hide NSFW content (set to `false` in config to show) |
+| `download_example_videos` | `false` | When `true`, cache full Civitai gallery video samples under `at_cache` during enrichment |
+| `generate_video_posters` | `true` | Extract JPEG posters for videos (uses **ffmpeg** when installed; enrichment still succeeds without it) |
 
 Database: `<ComfyUI base>/at_comfy.db`
 Image cache: `<ComfyUI base>/at_cache/`

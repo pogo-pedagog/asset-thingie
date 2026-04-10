@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from "vue";
+import { onMounted, onUnmounted, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { useBrowseStore } from "./stores/browse";
 import { useDownloadsStore } from "./stores/downloads";
@@ -16,6 +16,7 @@ const dl = useDownloadsStore();
 const {
   items,
   loading,
+  fetching,
   error,
   q,
   selected,
@@ -23,16 +24,84 @@ const {
   batchMode,
   batchIds,
   duplicateResolution,
-  nextPage,
+  hasMore,
+  stoppedReason,
 } = storeToRefs(browse);
 const { tasks, activeTab } = storeToRefs(dl);
 
-onMounted(() => {
+/** Scrollport for browse grid; IntersectionObserver is unreliable in nested overflow / iframe. */
+const scrollRoot = ref<HTMLElement | null>(null);
+const NEAR_BOTTOM_PX = 200;
+
+function isNearBottom(el: HTMLElement): boolean {
+  return el.scrollHeight - el.scrollTop - el.clientHeight <= NEAR_BOTTOM_PX;
+}
+
+function tryLoadMore(): void {
+  const root = scrollRoot.value;
+  if (!root || !hasMore.value) return;
+  if (loading.value) return;
+  if (!isNearBottom(root)) return;
+  void browse.loadMore();
+}
+
+/** One rAF per frame for all code paths (scroll, data) so we do not double `tryLoadMore` on mount. */
+let tryLoadMoreRaf = 0;
+function scheduleTryLoadMore(): void {
+  if (tryLoadMoreRaf) return;
+  tryLoadMoreRaf = requestAnimationFrame(() => {
+    tryLoadMoreRaf = 0;
+    tryLoadMore();
+  });
+}
+
+function onScrollRoot(): void {
+  scheduleTryLoadMore();
+}
+
+watch(
+  () => scrollRoot.value,
+  (root, prev) => {
+    if (prev) prev.removeEventListener("scroll", onScrollRoot);
+    if (!root) return;
+    root.addEventListener("scroll", onScrollRoot, { passive: true });
+    // Listener is attached synchronously; defer check so layout/DOM after v-if mount is settled.
+    scheduleTryLoadMore();
+  },
+  { flush: "post" },
+);
+
+watch([items, loading, fetching], () => {
+  scheduleTryLoadMore();
+});
+
+/** After first bootstrap search, keep grid/query in sync when server `hide_nsfw` changes (e.g. settings save). */
+const browseNsfwPolicyReady = ref(false);
+watch(
+  () => browse.hideNsfwFromConfig,
+  () => {
+    if (!browseNsfwPolicyReady.value) return;
+    void browse.search(true);
+  },
+);
+
+onMounted(async () => {
   dl.startPolling();
-  void browse.search(true);
+  try {
+    const cfg = await api.fetchConfig();
+    browse.hideNsfwFromConfig = Boolean(cfg.hide_nsfw);
+    browse.hideEarlyAccessFromConfig = cfg.hide_early_access !== false;
+  } catch {
+    /* Keep default SFW (hideNsfwFromConfig === true) if config unreachable */
+  }
+  void browse.search(true).finally(() => {
+    browseNsfwPolicyReady.value = true;
+  });
 });
 
 onUnmounted(() => {
+  const root = scrollRoot.value;
+  if (root) root.removeEventListener("scroll", onScrollRoot);
   dl.stopPolling();
 });
 
@@ -59,7 +128,9 @@ async function batchDownloadSelected(): Promise<void> {
   for (const id of batchIds.value) {
     const it = items.value.find((x) => x.id === id);
     if (!it) continue;
-    const spec = pickDefaultDownloadSpec(it);
+    const spec = pickDefaultDownloadSpec(it, {
+      skipEarlyAccessDownloads: browse.hideEarlyAccessFromConfig,
+    });
     if (!spec) continue;
     payload.push({
       civitai_model_id: spec.modelId,
@@ -196,12 +267,11 @@ async function onRemoveDl(id: string): Promise<void> {
         />
       </div>
 
-      <div class="at-browse-app__browse-scroll">
+      <div ref="scrollRoot" class="at-browse-app__browse-scroll">
         <BrowseResultGrid />
 
-        <button v-if="nextPage" type="button" class="at-btn at-btn--block" :disabled="loading" @click="browse.loadMore()">
-          Load more
-        </button>
+        <p v-if="fetching" class="at-muted">Loading more…</p>
+        <p v-if="stoppedReason && !fetching" class="at-muted">{{ stoppedReason }}</p>
       </div>
     </div>
 

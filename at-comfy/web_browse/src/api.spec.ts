@@ -6,6 +6,7 @@ import {
   DEFAULT_BASE_URL,
   getApiPrefix,
   browseSearch,
+  browsePage,
   buildBrowseSearchQuery,
 } from "./api";
 
@@ -53,12 +54,13 @@ describe("api", () => {
     );
   });
 
-  it("buildBrowseSearchQuery includes limit", () => {
-    const q = buildBrowseSearchQuery({ limit: 5 });
-    expect(q.get("limit")).toBe("5");
+  it("buildBrowseSearchQuery does not send limit", () => {
+    const q = buildBrowseSearchQuery({ q: "x" });
+    expect(q.has("limit")).toBe(false);
+    expect(q.get("q")).toBe("x");
   });
 
-  it("browseSearch uses /at when on Comfy", async () => {
+  it("browseSearch uses /at when on Comfy (no limit in query)", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(() =>
@@ -76,10 +78,34 @@ describe("api", () => {
         }),
       ) as unknown as typeof fetch,
     );
-    await browseSearch({ limit: 5 });
-    expect(fetch).toHaveBeenCalledWith(
-      expect.stringMatching(/\/at\/browse\/search\?limit=5$/),
-      expect.any(Object),
+    await browseSearch({});
+    expect(fetch).toHaveBeenCalledWith(expect.stringMatching(/\/at\/browse\/search$/), expect.any(Object));
+    const calledUrl = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    expect(calledUrl).not.toMatch(/limit=/);
+  });
+
+  it("browsePage sends url and filters as query params", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () =>
+            Promise.resolve(
+              JSON.stringify({
+                items: [],
+                next_page: null,
+                prev_page: null,
+              }),
+            ),
+        }),
+      ) as unknown as typeof fetch,
     );
+    await browsePage("https://civitai.com/api/v1/models?cursor=1", { q: "foo" });
+    const calledUrl = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    expect(calledUrl).toContain("/at/browse/page?");
+    expect(calledUrl).toContain("url=");
+    expect(calledUrl).toContain("q=foo");
   });
 });

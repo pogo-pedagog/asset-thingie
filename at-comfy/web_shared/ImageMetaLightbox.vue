@@ -1,21 +1,43 @@
 <script setup lang="ts">
-/** Full-screen image preview with optional JSON metadata (matches AT Browse gallery UX). */
-defineProps<{
+import { computed } from "vue";
+
+const props = defineProps<{
+  /** Poster or full image URL. */
   imageUrl: string | null;
+  /** When set with ``mediaType=video``, opens the video lightbox. */
+  playbackUrl?: string | null;
+  /** Optional explicit poster for ``<video>`` (e.g. frozen frame). */
+  posterUrl?: string | null;
+  /** ``image`` | ``video`` — when ``video``, prefer ``playbackUrl``. */
+  mediaType?: string | null;
   meta?: Record<string, unknown> | null;
 }>();
 
 defineEmits<{
   close: [];
 }>();
+
+const isVideo = computed(() => (props.mediaType || "").toLowerCase() === "video" && Boolean(props.playbackUrl));
+
+const isOpen = computed(() => Boolean(props.imageUrl || props.playbackUrl));
 </script>
 
 <template>
   <Teleport to="body">
-    <div v-if="imageUrl" class="at-imlb" @click.self="$emit('close')">
-      <div class="at-imlb__inner">
+    <div v-if="isOpen" class="at-imlb" @click.self="$emit('close')">
+      <!-- @click.self: dismiss when hitting padding / flex gaps / dead area beside narrower image or meta -->
+      <div class="at-imlb__inner" @click.self="$emit('close')">
         <button type="button" class="at-imlb__x" @click="$emit('close')">×</button>
-        <img :src="imageUrl" alt="Preview" />
+        <video
+          v-if="isVideo"
+          :key="playbackUrl || ''"
+          class="at-imlb__video"
+          :src="playbackUrl || undefined"
+          :poster="posterUrl || imageUrl || undefined"
+          controls
+          playsinline
+        />
+        <img v-else-if="imageUrl" :src="imageUrl" alt="Preview" />
         <pre v-if="meta && Object.keys(meta).length" class="at-imlb__meta">{{ JSON.stringify(meta, null, 2) }}</pre>
       </div>
     </div>
@@ -41,9 +63,11 @@ defineEmits<{
   overflow: auto;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 0.5rem;
 }
-.at-imlb__inner img {
+.at-imlb__inner img,
+.at-imlb__video {
   max-width: 100%;
   max-height: 70vh;
   object-fit: contain;

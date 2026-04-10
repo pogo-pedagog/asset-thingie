@@ -4,8 +4,12 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from collections.abc import Callable
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+_VIDEO_FILE_SUFFIXES = (".mp4", ".webm", ".mov", ".mkv")
 
 
 def _user_version(conn: sqlite3.Connection) -> int:
@@ -179,14 +183,106 @@ def _schema_v2(conn: sqlite3.Connection) -> None:
         )
 
 
+def _backfill_example_media_video_paths(conn: sqlite3.Connection) -> None:
+    """Set ``playback_local_path`` / ``poster_local_path`` for pre-v3 video rows (were only in ``local_path``)."""
+    conn.execute(
+        """
+        UPDATE example_media
+        SET playback_local_path = local_path
+        WHERE media_type = 'video'
+          AND playback_local_path IS NULL
+          AND local_path IS NOT NULL
+          AND trim(local_path) != ''
+          AND (
+            lower(local_path) LIKE '%.mp4'
+            OR lower(local_path) LIKE '%.webm'
+            OR lower(local_path) LIKE '%.mov'
+            OR lower(local_path) LIKE '%.mkv'
+          )
+        """,
+    )
+    conn.execute(
+        """
+        UPDATE example_media
+        SET poster_local_path = local_path
+        WHERE media_type = 'video'
+          AND poster_local_path IS NULL
+          AND local_path IS NOT NULL
+          AND trim(local_path) != ''
+          AND instr(local_path, '.poster.') > 0
+        """,
+    )
+    from at_comfy.config import cache_root
+
+    rows = conn.execute(
+        """
+        SELECT example_media_id, asset_id, local_path
+        FROM example_media
+        WHERE media_type = 'video'
+          AND playback_local_path IS NULL
+          AND local_path IS NOT NULL
+          AND trim(local_path) != ''
+          AND instr(local_path, '.poster.') > 0
+        """,
+    ).fetchall()
+    ex_root = cache_root() / "examples"
+    for row in rows:
+        lp = str(row["local_path"] or "").strip()
+        if ".poster." not in lp:
+            continue
+        stem, _, rest = lp.partition(".poster.")
+        if not stem or not rest:
+            continue
+        aid = int(row["asset_id"])
+        d: Path = ex_root / str(aid)
+        matches = [f"{stem}{ext}" for ext in _VIDEO_FILE_SUFFIXES if (d / f"{stem}{ext}").is_file()]
+        ex_mid = int(row["example_media_id"])
+        if not matches:
+            logger.warning(
+                "at_comfy schema v3 backfill: example_media id=%s asset_id=%s poster_path=%r has no "
+                "matching video file under %s (playback_local_path left unset)",
+                ex_mid,
+                aid,
+                lp,
+                d,
+            )
+            continue
+        if len(matches) > 1:
+            logger.warning(
+                "at_comfy schema v3 backfill: example_media id=%s asset_id=%s stem=%r has multiple "
+                "local videos %s; using %r",
+                ex_mid,
+                aid,
+                stem,
+                matches,
+                matches[0],
+            )
+        conn.execute(
+            "UPDATE example_media SET playback_local_path = ? WHERE example_media_id = ?",
+            (matches[0], ex_mid),
+        )
+
+
+def _schema_v3(conn: sqlite3.Connection) -> None:
+    cols = {str(r[1]) for r in conn.execute("PRAGMA table_info(example_media)").fetchall()}
+    if "playback_local_path" not in cols:
+        conn.execute("ALTER TABLE example_media ADD COLUMN playback_local_path TEXT")
+    if "poster_local_path" not in cols:
+        conn.execute("ALTER TABLE example_media ADD COLUMN poster_local_path TEXT")
+    _backfill_example_media_video_paths(conn)
+
+
 def migrate(conn: sqlite3.Connection) -> None:
-    v = _user_version(conn)
-    if v < 1:
-        logger.info("at_comfy: applying schema v1")
-        _schema_v1(conn)
-        _set_user_version(conn, 1)
-        v = 1
-    if v < 2:
-        logger.info("at_comfy: applying schema v2")
-        _schema_v2(conn)
-        _set_user_version(conn, 2)
+    """Apply pending migrations in order; each step commits DDL + PRAGMA user_version together."""
+    steps: list[tuple[int, Callable[[sqlite3.Connection], None]]] = [
+        (1, _schema_v1),
+        (2, _schema_v2),
+        (3, _schema_v3),
+    ]
+    for target, schema_fn in steps:
+        if _user_version(conn) >= target:
+            continue
+        logger.info("at_comfy: applying schema v%s", target)
+        schema_fn(conn)
+        _set_user_version(conn, target)
+        conn.commit()

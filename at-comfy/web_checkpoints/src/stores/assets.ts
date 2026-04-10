@@ -7,6 +7,7 @@ export type FilterSection = "" | "folder" | "tag" | "category";
 
 const VIEW_STORAGE_KEY = "at_checkpoints_view_mode";
 const GRID_COLUMNS_STORAGE_KEY = "at_checkpoints_grid_columns";
+const USE_REMOTE_IMAGES_KEY = "at_checkpoints_use_remote_images";
 const DEFAULT_GRID_COLUMNS = 2;
 const MIN_GRID_COLUMNS = 1;
 const MAX_GRID_COLUMNS = 20;
@@ -64,14 +65,27 @@ export const useAssetsStore = defineStore("at-checkpoints-assets", () => {
   const selectionMode = ref(false);
   const selectedIds = ref<Set<number>>(new Set());
 
+  const useRemoteImages = ref(true);
+
   try {
     const v = localStorage.getItem(VIEW_STORAGE_KEY);
     if (v === "list" || v === "grid") viewMode.value = v;
     const gc = localStorage.getItem(GRID_COLUMNS_STORAGE_KEY);
     if (gc != null) gridColumnCount.value = clampGridColumns(parseInt(gc, 10));
+    if (localStorage.getItem(USE_REMOTE_IMAGES_KEY) === "false") {
+      useRemoteImages.value = false;
+    }
   } catch {
     /* ignore */
   }
+
+  watch(useRemoteImages, (on) => {
+    try {
+      localStorage.setItem(USE_REMOTE_IMAGES_KEY, on ? "true" : "false");
+    } catch {
+      /* ignore */
+    }
+  });
 
   const hasMore = computed(() => items.value.length < total.value);
   const selectedCount = computed(() => selectedIds.value.size);
@@ -412,6 +426,7 @@ export const useAssetsStore = defineStore("at-checkpoints-assets", () => {
     detailLoading,
     selectionMode,
     selectedIds,
+    useRemoteImages,
     selectedCount,
     isAssetSelected,
     toggleAssetSelect,

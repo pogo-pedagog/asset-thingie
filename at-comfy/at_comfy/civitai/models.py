@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 # Civitai ``GET /api/v1/images`` returns ``meta: { "id": n, "meta": { "prompt": ... } }``;
 # ``model-versions`` / ``models`` usually use a flat ``meta`` object. Image rows also often omit
@@ -117,11 +117,26 @@ class CivitaiFile(BaseModel):
     name: str
     download_url: str = Field(alias="downloadUrl")
     size_kb: float | None = Field(default=None, alias="sizeKB")
+    file_type: str | None = Field(
+        default=None,
+        alias="type",
+        description="Civitai file role (Model, Pruned Model, Config, …).",
+    )
     primary: bool = False
     sha256: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(populate_by_name=True)
+
+    @field_validator("file_type", mode="before")
+    @classmethod
+    def normalize_file_type(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            s = value.strip()
+            return s if s else None
+        raise ValueError("Civitai file type must be a string or null")
 
     @classmethod
     def from_api(cls, raw: dict[str, Any]) -> CivitaiFile:
@@ -144,11 +159,41 @@ class CivitaiFile(BaseModel):
                 "name": raw.get("name"),
                 "downloadUrl": raw.get("downloadUrl") or "",
                 "sizeKB": raw.get("sizeKB"),
+                "type": raw.get("type"),
                 "primary": raw.get("primary", False),
                 "sha256": sha256,
                 "metadata": meta if isinstance(meta, dict) else {},
             }
         )
+
+
+def _dedupe_raw_version_files_by_sha256(files: list[Any]) -> list[dict[str, Any]]:
+    """Drop file rows that repeat the same ``SHA256`` within one version (same bytes, alt download URLs).
+
+    Civitai may list both ``/api/download/models/{versionId}`` and the same file with
+    ``?type=…&format=…``. Do not merge rows that share a filename but differ by hash.
+    When two rows share a hash, prefer the one with ``primary: true``.
+    """
+    out: list[dict[str, Any]] = []
+    by_sha_index: dict[str, int] = {}
+    for f in files:
+        if not isinstance(f, dict):
+            continue
+        hashes = f.get("hashes")
+        sha_raw = hashes.get("SHA256") if isinstance(hashes, dict) else None
+        if not isinstance(sha_raw, str) or not sha_raw.strip():
+            out.append(f)
+            continue
+        key = sha_raw.strip().upper()
+        if key not in by_sha_index:
+            by_sha_index[key] = len(out)
+            out.append(f)
+            continue
+        idx = by_sha_index[key]
+        cur = out[idx]
+        if bool(f.get("primary")) and not bool(cur.get("primary")):
+            out[idx] = f
+    return out
 
 
 class CivitaiModelVersion(BaseModel):
@@ -158,6 +203,11 @@ class CivitaiModelVersion(BaseModel):
     published_at: str | None = Field(default=None, alias="publishedAt")
     early_access_deadline: str | None = Field(default=None, alias="earlyAccessDeadline")
     availability: str | None = None
+    is_early_access: bool = Field(
+        default=False,
+        alias="isEarlyAccess",
+        description="Browse detail only: version is in Civitai early access.",
+    )
     description: str | None = None
     trained_words: list[str] = Field(default_factory=list, alias="trainedWords")
     images: list[CivitaiImage] = Field(default_factory=list)
@@ -201,9 +251,10 @@ class CivitaiModelVersion(BaseModel):
                 continue
             imgs.append(CivitaiImage.from_image_dict(im))
         files: list[CivitaiFile] = []
-        for f in raw.get("files") or []:
-            if isinstance(f, dict):
-                files.append(CivitaiFile.from_api(f))
+        for f in _dedupe_raw_version_files_by_sha256(list(raw.get("files") or [])):
+            files.append(CivitaiFile.from_api(f))
+        ia_raw = raw.get("isEarlyAccess")
+        is_ea = bool(ia_raw) if isinstance(ia_raw, bool) else False
         return cls.model_validate(
             {
                 "id": raw.get("id"),
@@ -212,6 +263,7 @@ class CivitaiModelVersion(BaseModel):
                 "publishedAt": raw.get("publishedAt"),
                 "earlyAccessDeadline": raw.get("earlyAccessDeadline"),
                 "availability": raw.get("availability"),
+                "isEarlyAccess": is_ea,
                 "description": raw.get("description"),
                 "trainedWords": raw.get("trainedWords") or [],
                 "images": imgs,
@@ -339,4 +391,3 @@ class SearchParams(BaseModel):
     nsfw: bool = False
     favorites_only: bool = False
     limit: int = Field(default=20, ge=1, le=100)
-    hide_early_access: bool = True

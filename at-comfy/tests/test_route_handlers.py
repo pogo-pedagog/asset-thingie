@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import urllib.parse
+
 import pytest
 from aiohttp.test_utils import TestClient, TestServer
 from at_comfy.civitai.models import CivitaiModel, CivitaiModelVersion, ModelListPage
 from at_comfy.db import get_conn
 from at_comfy.enrichment import EnrichmentService
+from at_comfy.route_handlers import BROWSE_CIVITAI_LIMIT
 from at_comfy.routes import create_test_app
 
 
@@ -55,11 +58,14 @@ async def test_browse_search_uses_mock_client(tmp_comfy_base, monkeypatch) -> No
         },
     )
 
+    received_params: list = []
+
     class FakeClient:
         def __init__(self, *a, **k):
             pass
 
-        async def search(self, _params):
+        async def search(self, params):
+            received_params.append(params)
             return ModelListPage(items=[sample], metadata={"nextPage": None, "prevPage": None})
 
         async def aclose(self):
@@ -73,6 +79,54 @@ async def test_browse_search_uses_mock_client(tmp_comfy_base, monkeypatch) -> No
         data = await r.json()
         assert len(data["items"]) == 1
         assert data["items"][0]["id"] == 42
+        assert len(received_params) == 1
+        assert received_params[0].limit == BROWSE_CIVITAI_LIMIT
+
+
+@pytest.mark.asyncio
+async def test_browse_page_merges_url_with_search_params(tmp_comfy_base, monkeypatch) -> None:
+    sample = CivitaiModel.from_api(
+        {
+            "id": 7,
+            "name": "Paged",
+            "type": "LORA",
+            "modelVersions": [],
+            "tags": [],
+        },
+    )
+    fetched_urls: list[str] = []
+
+    class FakeClient:
+        def __init__(self, *a, **k):
+            pass
+
+        async def fetch_url(self, url: str, **_kwargs):
+            fetched_urls.append(url)
+            return ModelListPage(
+                items=[sample],
+                metadata={
+                    "nextPage": "https://civitai.com/api/v1/models?cursor=next",
+                    "prevPage": None,
+                },
+            )
+
+        async def aclose(self):
+            return None
+
+    monkeypatch.setattr("at_comfy.route_handlers.CivitaiClient", FakeClient)
+    app = create_test_app()
+    next_raw = "https://civitai.com/api/v1/models?cursor=abc"
+    qstr = urllib.parse.urlencode({"url": next_raw, "q": "myterm", "search_type": "model_name"})
+    async with TestClient(TestServer(app)) as client:
+        r = await client.get(f"/at/browse/page?{qstr}")
+        assert r.status == 200
+        data = await r.json()
+        assert len(fetched_urls) == 1
+        assert f"limit={BROWSE_CIVITAI_LIMIT}" in fetched_urls[0]
+        assert "query=myterm" in fetched_urls[0] or "query=myterm&" in fetched_urls[0]
+        np = data.get("next_page") or ""
+        assert f"limit={BROWSE_CIVITAI_LIMIT}" in np
+        assert "cursor=next" in np
 
 
 @pytest.mark.asyncio
@@ -108,6 +162,10 @@ async def test_browse_model_enriches_versions_for_image_meta(tmp_comfy_base, mon
             pass
 
         async def get_model(self, mid: int, nsfw: bool = False):
+            assert mid == 7
+            return CivitaiModel.from_api(model_raw)
+
+        async def get_model_detail_payload(self, mid: int, nsfw: bool = False):
             assert mid == 7
             return CivitaiModel.from_api(model_raw)
 

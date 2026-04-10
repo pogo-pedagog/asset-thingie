@@ -180,6 +180,7 @@ def _base_query(extra_where: str = "") -> str:
             sm.source_url,
             sm.creator_name,
             sm.title,
+            sm.raw_snapshot_json,
             (SELECT GROUP_CONCAT(t.name, ' · ')
              FROM asset_tags at
              INNER JOIN tags t ON t.tag_id = at.tag_id
@@ -410,7 +411,8 @@ def list_example_media(asset_id: int) -> list[sqlite3.Row]:
         conn.execute(
             """
             SELECT example_media_id, asset_id, media_type, origin_type, local_path, source_url,
-                   width, height, caption, metadata_json, sort_order, thumbnail_local_path
+                   width, height, caption, metadata_json, sort_order, thumbnail_local_path,
+                   playback_local_path, poster_local_path
             FROM example_media
             WHERE asset_id = ?
             ORDER BY sort_order ASC, example_media_id ASC

@@ -35,6 +35,10 @@ export interface CivitaiFileSummary {
   id: number;
   name: string;
   downloadUrl?: string;
+  /** Civitai file role (JSON ``type``); often ``Model`` even for pruned vs full — see ``metadata.size``. */
+  type?: string | null;
+  /** Per-file hints, e.g. ``{ size: \"pruned\" | \"full\", fp: \"fp16\", format: \"SafeTensor\" }``. */
+  metadata?: Record<string, unknown> | null;
   primary?: boolean;
   sizeKB?: number | null;
   sha256?: string | null;
@@ -47,6 +51,8 @@ export interface CivitaiVersionSummary {
   trainedWords?: string[];
   files: CivitaiFileSummary[];
   images: CivitaiImageSummary[];
+  /** Present on model detail: Civitai early-access (not used in grid search items). */
+  isEarlyAccess?: boolean;
 }
 
 /** One row from ``/at/browse/search`` (full Civitai model JSON). */
@@ -110,9 +116,12 @@ export interface AtComfyPublicConfig {
   scan_on_startup: boolean;
   enrichment_mode: string;
   enrichment_rate_limit_ms: number;
+  max_example_images: number;
   max_parallel_downloads: number;
   download_subpath_template: string;
   hide_early_access: boolean;
   hide_nsfw: boolean;
+  download_example_videos: boolean;
+  generate_video_posters: boolean;
   scan_directories: Record<string, string | null>;
 }

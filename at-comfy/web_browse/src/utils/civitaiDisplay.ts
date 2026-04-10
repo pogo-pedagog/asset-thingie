@@ -7,7 +7,7 @@ export function creatorNameFromItem(item: CivitaiBrowseItem): string | null {
   return null;
 }
 
-export function coverUrlFromBrowseItem(item: CivitaiBrowseItem): string | null {
+export function coverMediaFromBrowseItem(item: CivitaiBrowseItem): CivitaiImageSummary | null {
   const vers = item.modelVersions;
   if (!vers?.length) return null;
   for (const v of vers) {
@@ -16,11 +16,15 @@ export function coverUrlFromBrowseItem(item: CivitaiBrowseItem): string | null {
     for (const im of ims) {
       const t = (im.type || "image").toLowerCase();
       if (t === "video") continue;
-      if (im.url) return im.url;
+      if (im.url) return im;
     }
-    if (ims[0]?.url) return ims[0].url;
+    if (ims[0]?.url) return ims[0];
   }
   return null;
+}
+
+export function coverUrlFromBrowseItem(item: CivitaiBrowseItem): string | null {
+  return coverMediaFromBrowseItem(item)?.url ?? null;
 }
 
 export function thumbUrl(url: string): string {
