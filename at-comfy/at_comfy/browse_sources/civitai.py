@@ -8,7 +8,18 @@ from at_comfy.browse_sources.civitai_enrich import enrich_model_versions_with_im
 from at_comfy.browse_sources.types import BrowsePageResult
 from at_comfy.civitai.client import CivitaiClient, merge_models_list_pagination_url
 from at_comfy.civitai.models import ModelListPage, SearchParams
+from at_comfy.civitai_catalog import civitai_base_models_upsert_batch
 from at_comfy.config import ATComfyConfig
+
+
+def _civitai_base_models_from_page(page: ModelListPage) -> list[str]:
+    names: list[str] = []
+    for m in page.items:
+        for v in m.model_versions:
+            bm = (v.base_model or "").strip()
+            if bm:
+                names.append(bm)
+    return names
 
 
 def civitai_model_list_page_dict(page: ModelListPage, params: SearchParams | None = None) -> dict[str, Any]:
@@ -87,6 +98,7 @@ class CivitaiBrowseSource:
         client = self._client()
         try:
             page = await client.search(params)
+            civitai_base_models_upsert_batch(_civitai_base_models_from_page(page))
             d = civitai_model_list_page_dict(page, params)
             return BrowsePageResult(
                 items=d["items"],
@@ -102,6 +114,7 @@ class CivitaiBrowseSource:
         client = self._client()
         try:
             page = await client.fetch_url(fetch_url)
+            civitai_base_models_upsert_batch(_civitai_base_models_from_page(page))
             d = civitai_model_list_page_dict(page, params)
             return BrowsePageResult(
                 items=d["items"],

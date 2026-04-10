@@ -115,6 +115,21 @@ async function resetCivarchiveBaseModels(): Promise<void> {
   }
 }
 
+async function resetCivitaiBaseModels(): Promise<void> {
+  if (
+    !confirm(
+      "Clear the Civitai base model list learned from browse? The dropdown will fall back to defaults until new searches add names again.",
+    )
+  ) {
+    return;
+  }
+  try {
+    await api.postCivitaiBaseModelsReset();
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Reset failed";
+  }
+}
+
 async function tickStatus(): Promise<void> {
   try {
     scanStatus.value = await api.fetchScanStatus();
@@ -220,11 +235,14 @@ onUnmounted(() => {
       </label>
 
       <p class="at-hint">
-        CivArchive browse accumulates <strong>base model</strong> strings from search results into SQLite. Use reset
-        if the dropdown grows stale.
+        Browse accumulates <strong>base model</strong> strings from Civitai / CivArchive search results into SQLite. Use
+        reset if a dropdown grows stale.
       </p>
       <button type="button" class="at-btn at-btn--ghost" @click="resetCivarchiveBaseModels">
         Reset CivArchive base model list
+      </button>
+      <button type="button" class="at-btn at-btn--ghost" @click="resetCivitaiBaseModels">
+        Reset Civitai base model list
       </button>
 
       <label class="at-label at-label--row">

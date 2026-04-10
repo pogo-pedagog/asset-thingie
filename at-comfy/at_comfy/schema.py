@@ -297,6 +297,19 @@ def _schema_v5(conn: sqlite3.Connection) -> None:
     )
 
 
+def _schema_v6(conn: sqlite3.Connection) -> None:
+    """Civitai: distinct ``baseModel`` strings seen in browse list/page traffic."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS civitai_base_models (
+            name TEXT PRIMARY KEY COLLATE NOCASE,
+            first_seen_at TEXT NOT NULL,
+            last_seen_at TEXT NOT NULL
+        );
+        """,
+    )
+
+
 def migrate(conn: sqlite3.Connection) -> None:
     """Apply pending migrations in order; each step commits DDL + PRAGMA user_version together."""
     steps: list[tuple[int, Callable[[sqlite3.Connection], None]]] = [
@@ -305,6 +318,7 @@ def migrate(conn: sqlite3.Connection) -> None:
         (3, _schema_v3),
         (4, _schema_v4),
         (5, _schema_v5),
+        (6, _schema_v6),
     ]
     for target, schema_fn in steps:
         if _user_version(conn) >= target:

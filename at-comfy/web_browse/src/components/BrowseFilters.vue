@@ -4,8 +4,8 @@ import { storeToRefs } from "pinia";
 import * as api from "../api";
 import { useBrowseStore } from "../stores/browse";
 import {
-  BROWSE_BASE_MODELS,
   BROWSE_CIVARCHIVE_DEFAULT_BASE_MODELS,
+  BROWSE_CIVITAI_DEFAULT_BASE_MODELS,
   BROWSE_CONTENT_TYPES,
   BROWSE_CIVARCHIVE_SORT_OPTIONS,
   BROWSE_PERIOD_OPTIONS,
@@ -37,6 +37,13 @@ const civarchiveBaseTriggerRef = ref<HTMLElement | null>(null);
 const civarchiveBasePortalRef = ref<HTMLElement | null>(null);
 const civarchiveDdPortalStyle = ref<Record<string, string>>({});
 
+const civitaiBaseModelOptions = ref<string[]>([...BROWSE_CIVITAI_DEFAULT_BASE_MODELS]);
+const civitaiBaseDropdownOpen = ref(false);
+const civitaiBaseFilter = ref("");
+const civitaiBaseTriggerRef = ref<HTMLElement | null>(null);
+const civitaiBasePortalRef = ref<HTMLElement | null>(null);
+const civitaiDdPortalStyle = ref<Record<string, string>>({});
+
 const civarchiveBaseSummary = computed(() => {
   const m = civarchiveBaseModels.value;
   if (!m.length) return "Any";
@@ -44,13 +51,27 @@ const civarchiveBaseSummary = computed(() => {
   return `${m.length} selected`;
 });
 
+const civitaiBaseSummary = computed(() => {
+  const m = baseModels.value;
+  if (!m.length) return "Any";
+  if (m.length === 1) return m[0]!;
+  return `${m.length} selected`;
+});
+
 /** Chevron for multiselect trigger (avoid mojibake in template literals). */
-const CIVARCHIVE_DD_OPEN = "\u25B2";
-const CIVARCHIVE_DD_SHUT = "\u25BC";
+const DD_OPEN = "\u25B2";
+const DD_SHUT = "\u25BC";
 
 const filteredCivarchiveBaseOptions = computed(() => {
   const q = civarchiveBaseFilter.value.trim().toLowerCase();
   const opts = civarchiveBaseModelOptions.value;
+  if (!q) return opts;
+  return opts.filter((b) => b.toLowerCase().includes(q));
+});
+
+const filteredCivitaiBaseOptions = computed(() => {
+  const q = civitaiBaseFilter.value.trim().toLowerCase();
+  const opts = civitaiBaseModelOptions.value;
   if (!q) return opts;
   return opts.filter((b) => b.toLowerCase().includes(q));
 });
@@ -69,27 +90,49 @@ function syncCivarchiveDdPosition(): void {
   };
 }
 
-function onCivarchiveBaseDocPointerDown(ev: PointerEvent): void {
-  if (!civarchiveBaseDropdownOpen.value) return;
+function syncCivitaiDdPosition(): void {
+  const btn = civitaiBaseTriggerRef.value;
+  if (!btn) return;
+  const r = btn.getBoundingClientRect();
+  civitaiDdPortalStyle.value = {
+    position: "fixed",
+    top: `${Math.round(r.bottom + 4)}px`,
+    left: `${Math.round(r.left)}px`,
+    width: `${Math.round(r.width)}px`,
+    "max-width": "calc(100vw - 16px)",
+    "z-index": "10000",
+  };
+}
+
+function onBrowseFiltersDocPointerDown(ev: PointerEvent): void {
   const t = ev.target;
   if (!(t instanceof Node)) return;
-  const trig = civarchiveBaseTriggerRef.value;
-  const port = civarchiveBasePortalRef.value;
-  if (trig?.contains(t) || port?.contains(t)) return;
-  civarchiveBaseDropdownOpen.value = false;
+  if (civarchiveBaseDropdownOpen.value) {
+    const trig = civarchiveBaseTriggerRef.value;
+    const port = civarchiveBasePortalRef.value;
+    if (trig?.contains(t) || port?.contains(t)) return;
+    civarchiveBaseDropdownOpen.value = false;
+  }
+  if (civitaiBaseDropdownOpen.value) {
+    const trig = civitaiBaseTriggerRef.value;
+    const port = civitaiBasePortalRef.value;
+    if (trig?.contains(t) || port?.contains(t)) return;
+    civitaiBaseDropdownOpen.value = false;
+  }
 }
 
 function onWinScrollOrResize(): void {
   if (civarchiveBaseDropdownOpen.value) syncCivarchiveDdPosition();
+  if (civitaiBaseDropdownOpen.value) syncCivitaiDdPosition();
 }
 
 onMounted(() => {
-  document.addEventListener("pointerdown", onCivarchiveBaseDocPointerDown, true);
+  document.addEventListener("pointerdown", onBrowseFiltersDocPointerDown, true);
   window.addEventListener("resize", onWinScrollOrResize);
   window.addEventListener("scroll", onWinScrollOrResize, true);
 });
 onUnmounted(() => {
-  document.removeEventListener("pointerdown", onCivarchiveBaseDocPointerDown, true);
+  document.removeEventListener("pointerdown", onBrowseFiltersDocPointerDown, true);
   window.removeEventListener("resize", onWinScrollOrResize);
   window.removeEventListener("scroll", onWinScrollOrResize, true);
 });
@@ -104,13 +147,32 @@ async function ensureCivarchiveBaseModels(): Promise<void> {
   }
 }
 
+async function ensureCivitaiBaseModels(): Promise<void> {
+  if (activeSource.value !== "civitai") return;
+  try {
+    const r = await api.fetchCivitaiBaseModels();
+    if (Array.isArray(r.base_models) && r.base_models.length) civitaiBaseModelOptions.value = r.base_models;
+  } catch {
+    /* keep curated list */
+  }
+}
+
 watch(expanded, (v) => {
-  if (v) void ensureCivarchiveBaseModels();
-  else civarchiveBaseDropdownOpen.value = false;
+  if (v) {
+    if (activeSource.value === "civarchive") void ensureCivarchiveBaseModels();
+    else void ensureCivitaiBaseModels();
+  } else {
+    civarchiveBaseDropdownOpen.value = false;
+    civitaiBaseDropdownOpen.value = false;
+  }
 });
 watch(activeSource, () => {
   civarchiveBaseDropdownOpen.value = false;
-  if (expanded.value) void ensureCivarchiveBaseModels();
+  civitaiBaseDropdownOpen.value = false;
+  if (expanded.value) {
+    if (activeSource.value === "civarchive") void ensureCivarchiveBaseModels();
+    else void ensureCivitaiBaseModels();
+  }
 });
 
 watch(civarchiveBaseDropdownOpen, (open) => {
@@ -123,12 +185,22 @@ watch(civarchiveBaseDropdownOpen, (open) => {
   });
 });
 
+watch(civitaiBaseDropdownOpen, (open) => {
+  if (!open) {
+    civitaiBaseFilter.value = "";
+    return;
+  }
+  void nextTick(() => {
+    syncCivitaiDdPosition();
+  });
+});
+
 function toggleContentType(t: string): void {
   const arr = contentTypes.value.slice();
   const i = arr.indexOf(t);
   if (i >= 0) arr.splice(i, 1);
   else arr.push(t);
-         contentTypes.value = arr;
+  contentTypes.value = arr;
 }
 
 function hasContentType(t: string): boolean {
@@ -140,7 +212,7 @@ function toggleBaseModel(bm: string): void {
   const i = arr.indexOf(bm);
   if (i >= 0) arr.splice(i, 1);
   else arr.push(bm);
-         baseModels.value = arr;
+  baseModels.value = arr;
 }
 
 function hasBaseModel(bm: string): boolean {
@@ -200,7 +272,7 @@ function hasCivarchiveBaseModel(bm: string): boolean {
           >
             <span class="browse-filters__dd-trigger-text">{{ civarchiveBaseSummary }}</span>
             <span class="browse-filters__dd-chevron" aria-hidden="true">{{
-              civarchiveBaseDropdownOpen ? CIVARCHIVE_DD_OPEN : CIVARCHIVE_DD_SHUT
+              civarchiveBaseDropdownOpen ? DD_OPEN : DD_SHUT
             }}</span>
           </button>
         </div>
@@ -241,14 +313,21 @@ function hasCivarchiveBaseModel(bm: string): boolean {
           </div>
         </div>
 
-        <div class="browse-filters__section">
+        <div class="browse-filters__row browse-filters__multiselect">
           <span class="browse-filters__label">Base models</span>
-          <div class="browse-filters__chips">
-            <label v-for="bm in BROWSE_BASE_MODELS" :key="bm" class="browse-filters__chk">
-              <input type="checkbox" :checked="hasBaseModel(bm)" @change="toggleBaseModel(bm)" />
-              {{ bm }}
-            </label>
-          </div>
+          <button
+            ref="civitaiBaseTriggerRef"
+            type="button"
+            class="at-input at-input--sm browse-filters__dd-trigger"
+            :aria-expanded="civitaiBaseDropdownOpen"
+            aria-haspopup="listbox"
+            @click="civitaiBaseDropdownOpen = !civitaiBaseDropdownOpen"
+          >
+            <span class="browse-filters__dd-trigger-text">{{ civitaiBaseSummary }}</span>
+            <span class="browse-filters__dd-chevron" aria-hidden="true">{{
+              civitaiBaseDropdownOpen ? DD_OPEN : DD_SHUT
+            }}</span>
+          </button>
         </div>
 
         <label class="browse-filters__row">
@@ -289,6 +368,32 @@ function hasCivarchiveBaseModel(bm: string): boolean {
             <span>{{ bm }}</span>
           </label>
           <p v-if="!filteredCivarchiveBaseOptions.length" class="browse-filters__dd-empty">No matches</p>
+        </div>
+      </div>
+    </Teleport>
+    <Teleport to="body">
+      <div
+        v-show="activeSource === 'civitai' && expanded && civitaiBaseDropdownOpen"
+        ref="civitaiBasePortalRef"
+        class="browse-filters__dd-panel browse-filters__dd-panel--portal"
+        :style="civitaiDdPortalStyle"
+        role="listbox"
+        @click.stop
+      >
+        <input
+          v-model="civitaiBaseFilter"
+          type="search"
+          class="at-input at-input--sm browse-filters__dd-filter"
+          placeholder="Filter list…"
+          autocomplete="off"
+          @keydown.escape.stop="civitaiBaseDropdownOpen = false"
+        />
+        <div class="browse-filters__dd-scroll">
+          <label v-for="bm in filteredCivitaiBaseOptions" :key="bm" class="browse-filters__dd-item">
+            <input type="checkbox" :checked="hasBaseModel(bm)" @change="toggleBaseModel(bm)" />
+            <span>{{ bm }}</span>
+          </label>
+          <p v-if="!filteredCivitaiBaseOptions.length" class="browse-filters__dd-empty">No matches</p>
         </div>
       </div>
     </Teleport>

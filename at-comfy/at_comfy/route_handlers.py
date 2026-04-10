@@ -330,6 +330,19 @@ async def handle_browse_civarchive_base_models_reset(_request: web.Request) -> w
     return web.json_response({"ok": True, "base_models": civarchive_base_models_list()})
 
 
+async def handle_browse_civitai_base_models(_request: web.Request) -> web.Response:
+    from at_comfy.civitai_catalog import civitai_base_models_list
+
+    return web.json_response({"base_models": civitai_base_models_list()})
+
+
+async def handle_browse_civitai_base_models_reset(_request: web.Request) -> web.Response:
+    from at_comfy.civitai_catalog import civitai_base_models_clear, civitai_base_models_list
+
+    civitai_base_models_clear()
+    return web.json_response({"ok": True, "base_models": civitai_base_models_list()})
+
+
 async def handle_browse_detail_by_source(request: web.Request) -> web.Response:
     cfg = load_config()
     sid = (request.match_info.get("source") or "").strip()
@@ -588,6 +601,8 @@ def register_all(routes: Any) -> None:
     routes.get("/at/browse/sources")(handle_browse_sources)
     routes.get("/at/browse/civarchive/base-models")(handle_browse_civarchive_base_models)
     routes.post("/at/browse/civarchive/base-models/reset")(handle_browse_civarchive_base_models_reset)
+    routes.get("/at/browse/civitai/base-models")(handle_browse_civitai_base_models)
+    routes.post("/at/browse/civitai/base-models/reset")(handle_browse_civitai_base_models_reset)
     routes.get("/at/browse/{source}/search")(handle_browse_search_by_source)
     routes.get("/at/browse/{source}/page")(handle_browse_page_by_source)
     routes.get("/at/browse/{source}/detail/{item_ref}")(handle_browse_detail_by_source)
@@ -624,6 +639,8 @@ def mount_on_app(app: web.Application) -> None:
     app.router.add_get("/at/browse/sources", handle_browse_sources)
     app.router.add_get("/at/browse/civarchive/base-models", handle_browse_civarchive_base_models)
     app.router.add_post("/at/browse/civarchive/base-models/reset", handle_browse_civarchive_base_models_reset)
+    app.router.add_get("/at/browse/civitai/base-models", handle_browse_civitai_base_models)
+    app.router.add_post("/at/browse/civitai/base-models/reset", handle_browse_civitai_base_models_reset)
     app.router.add_get("/at/browse/{source}/search", handle_browse_search_by_source)
     app.router.add_get("/at/browse/{source}/page", handle_browse_page_by_source)
     app.router.add_get("/at/browse/{source}/detail/{item_ref}", handle_browse_detail_by_source)

@@ -16,7 +16,7 @@ def test_migrate_creates_core_tables(tmp_path) -> None:
     conn = sqlite3.connect(str(db_file))
     try:
         ver = conn.execute("PRAGMA user_version").fetchone()[0]
-        assert ver == 5
+        assert ver == 6
         names = {
             r[0]
             for r in conn.execute(
@@ -29,6 +29,7 @@ def test_migrate_creates_core_tables(tmp_path) -> None:
             "download_tasks",
             "source_metadata",
             "civarchive_base_models",
+            "civitai_base_models",
         ):
             assert need in names
     finally:
@@ -46,7 +47,7 @@ def test_schema_v4_adds_raw_snapshot_json_when_missing(tmp_path) -> None:
         migrate(conn)
         cols = {str(r[1]) for r in conn.execute("PRAGMA table_info(source_metadata)").fetchall()}
         assert "raw_snapshot_json" in cols
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == 5
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == 6
     finally:
         conn.close()
 

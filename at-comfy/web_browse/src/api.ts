@@ -135,6 +135,14 @@ export async function postCivarchiveBaseModelsReset(): Promise<{ ok: boolean; ba
   return fetchJson(`${getApiPrefix()}/browse/civarchive/base-models/reset`, { method: "POST" });
 }
 
+export async function fetchCivitaiBaseModels(): Promise<{ base_models: string[] }> {
+  return fetchJson(`${getApiPrefix()}/browse/civitai/base-models`);
+}
+
+export async function postCivitaiBaseModelsReset(): Promise<{ ok: boolean; base_models: string[] }> {
+  return fetchJson(`${getApiPrefix()}/browse/civitai/base-models/reset`, { method: "POST" });
+}
+
 export async function browseDetail(
   source: BrowseSourceId,
   itemRef: string,
