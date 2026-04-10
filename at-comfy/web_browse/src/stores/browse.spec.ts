@@ -157,6 +157,17 @@ describe("browse store", () => {
     expect(s.stoppedReason).toMatch(/same page/i);
   });
 
+  it("preserves query state per source when switching", () => {
+    const s = useBrowseStore();
+    s.q = "pony";
+    s.setActiveSource("civarchive");
+    s.q = "mixplin";
+    s.setActiveSource("civitai");
+    expect(s.q).toBe("pony");
+    s.setActiveSource("civarchive");
+    expect(s.q).toBe("mixplin");
+  });
+
   it("searchParams reflects hide_nsfw: nsfw false when hideNsfwFromConfig is true", () => {
     const s = useBrowseStore();
     s.hideNsfwFromConfig = true;
@@ -172,9 +183,9 @@ describe("browse store", () => {
   it("toggleBatchId adds and removes", () => {
     const s = useBrowseStore();
     s.toggleBatchId(5);
-    expect(s.batchIds.has(5)).toBe(true);
+    expect(s.batchIds.has("5")).toBe(true);
     s.toggleBatchId(5);
-    expect(s.batchIds.has(5)).toBe(false);
+    expect(s.batchIds.has("5")).toBe(false);
   });
 
   it("setBatchMode clears selection when disabled", () => {

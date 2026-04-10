@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { useBrowseStore } from "./stores/browse";
 import { useDownloadsStore } from "./stores/downloads";
@@ -8,6 +8,8 @@ import BrowseFilters from "./components/BrowseFilters.vue";
 import BrowseResultGrid from "./components/BrowseResultGrid.vue";
 import BrowseModelDetail from "./components/BrowseModelDetail.vue";
 import ConfigPanel from "./components/ConfigPanel.vue";
+import { browseSourceOptions } from "./sources/registry";
+import type { BrowseSourceId } from "./sources/types";
 import type { CivitaiModelDetail } from "./types";
 import { pickDefaultDownloadSpec } from "./utils/downloadSpec";
 
@@ -123,10 +125,20 @@ function onDetailError(msg: string): void {
   dl.showToast(msg);
 }
 
+const searchPlaceholder = computed(() =>
+  browse.activeSource === "civitai" ? "Search Civitai…" : "Search CivArchive…",
+);
+
+function onSourceChange(ev: Event): void {
+  const v = (ev.target as HTMLSelectElement).value as BrowseSourceId;
+  browse.setActiveSource(v);
+  void browse.search(true);
+}
+
 async function batchDownloadSelected(): Promise<void> {
   const payload: Record<string, unknown>[] = [];
   for (const id of batchIds.value) {
-    const it = items.value.find((x) => x.id === id);
+    const it = items.value.find((x) => String(x.id) === id);
     if (!it) continue;
     const spec = pickDefaultDownloadSpec(it, {
       skipEarlyAccessDownloads: browse.hideEarlyAccessFromConfig,
@@ -233,7 +245,17 @@ async function onRemoveDl(id: string): Promise<void> {
     <div v-if="activeTab === 'browse'" class="at-browse-app__panel at-browse-app__panel--browse">
       <div class="at-browse-app__browse-chrome">
         <div class="at-browse-app__search">
-          <input v-model="q" class="at-input" placeholder="Search Civitai…" @keyup.enter="onSearch" />
+          <select
+            class="at-input at-browse-app__source-select"
+            aria-label="Browse source"
+            :value="browse.activeSource"
+            @change="onSourceChange"
+          >
+            <option v-for="opt in browseSourceOptions" :key="opt.id" :value="opt.id">
+              {{ opt.label }}
+            </option>
+          </select>
+          <input v-model="q" class="at-input" :placeholder="searchPlaceholder" @keyup.enter="onSearch" />
           <button type="button" class="at-btn" :disabled="loading" @click="onSearch">Search</button>
           <button
             type="button"

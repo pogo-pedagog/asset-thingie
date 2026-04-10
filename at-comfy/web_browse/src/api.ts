@@ -1,3 +1,4 @@
+import type { BrowseSourceId } from "./sources/types";
 import type { CivitaiBrowseResponse, DownloadTaskRow, FiltersResponse, AtComfyPublicConfig } from "./types";
 
 export const STORAGE_URL_KEY = "at_assetthingie_url";
@@ -61,6 +62,10 @@ export interface BrowseSearchParams {
   sort?: string;
   period?: string;
   nsfw?: boolean;
+  /** CivArchive ``/api/search`` kind filter (version | file | user). */
+  kind?: string;
+  /** CivArchive page index (1-based). */
+  page?: string | number;
 }
 
 export function buildBrowseSearchQuery(p: BrowseSearchParams): URLSearchParams {
@@ -76,6 +81,8 @@ export function buildBrowseSearchQuery(p: BrowseSearchParams): URLSearchParams {
   if (p.sort) sp.set("sort", p.sort);
   if (p.period) sp.set("period", p.period);
   if (p.nsfw) sp.set("nsfw", "true");
+  if (p.kind?.trim()) sp.set("kind", p.kind.trim());
+  if (p.page != null && String(p.page).trim() !== "") sp.set("page", String(p.page));
   return sp;
 }
 
@@ -83,20 +90,37 @@ export async function fetchHealth(): Promise<{ ok: boolean }> {
   return fetchJson(`${getApiPrefix()}/health`);
 }
 
-export async function browseSearch(params: BrowseSearchParams): Promise<CivitaiBrowseResponse> {
+export async function browseSearch(
+  source: BrowseSourceId,
+  params: BrowseSearchParams,
+): Promise<CivitaiBrowseResponse> {
   const q = buildBrowseSearchQuery(params).toString();
-  return fetchJson(`${getApiPrefix()}/browse/search${q ? `?${q}` : ""}`);
+  return fetchJson(`${getApiPrefix()}/browse/${source}/search${q ? `?${q}` : ""}`);
 }
 
-export async function browsePage(urlParam: string, params: BrowseSearchParams): Promise<CivitaiBrowseResponse> {
+export async function browsePage(
+  source: BrowseSourceId,
+  urlParam: string,
+  params: BrowseSearchParams,
+): Promise<CivitaiBrowseResponse> {
   const sp = buildBrowseSearchQuery(params);
   sp.set("url", urlParam);
-  return fetchJson(`${getApiPrefix()}/browse/page?${sp.toString()}`);
+  return fetchJson(`${getApiPrefix()}/browse/${source}/page?${sp.toString()}`);
 }
 
-export async function browseModel(modelId: number, nsfw = false): Promise<Record<string, unknown>> {
+export async function browseDetail(
+  source: BrowseSourceId,
+  itemRef: string,
+  nsfw = false,
+): Promise<Record<string, unknown>> {
+  const enc = encodeURIComponent(itemRef);
   const q = nsfw ? "?nsfw=true" : "";
-  return fetchJson(`${getApiPrefix()}/browse/model/${modelId}${q}`);
+  return fetchJson(`${getApiPrefix()}/browse/${source}/detail/${enc}${q}`);
+}
+
+/** @deprecated Prefer ``browseDetail("civitai", String(modelId), nsfw)``. */
+export async function browseModel(modelId: number, nsfw = false): Promise<Record<string, unknown>> {
+  return browseDetail("civitai", String(modelId), nsfw);
 }
 
 export async function fetchFilters(params?: { family?: string }): Promise<FiltersResponse> {
