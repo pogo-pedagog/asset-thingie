@@ -116,6 +116,7 @@ export interface AtComfyPublicConfig {
   scan_on_startup: boolean;
   enrichment_mode: string;
   enrichment_rate_limit_ms: number;
+  max_example_images: number;
   max_parallel_downloads: number;
   download_subpath_template: string;
   hide_early_access: boolean;

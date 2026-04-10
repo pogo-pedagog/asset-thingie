@@ -20,7 +20,7 @@ from at_comfy.civitai.client import (
     civitai_image_url_with_width,
 )
 from at_comfy.civitai.models import CivitaiModel, CivitaiModelVersion
-from at_comfy.config import cache_root
+from at_comfy.config import cache_root, clamp_max_example_images
 from at_comfy.db import get_conn
 from at_comfy.media_processing import (
     jpeg_thumbnail_from_image_file,
@@ -248,11 +248,13 @@ class EnrichmentService:
                 ("found", str(row["path"])),
             )
             conn.commit()
-            ver_gallery = await _version_with_rich_image_meta(
-                client, ver_obj, nsfw=not cfg.hide_nsfw
+            await _fetch_civitai_cover_and_example_gallery(
+                asset_id=asset_id,
+                model=full,
+                ver=ver_obj,
+                cfg=cfg,
+                client=client,
             )
-            await _fetch_cover(asset_id, full, cfg, ver=ver_obj)
-            await _fetch_example_media(asset_id, ver_gallery or ver_obj, cfg, model=full)
         finally:
             if own:
                 await client.aclose()
@@ -462,7 +464,7 @@ async def _fetch_example_media(
     cfg: Any,
     *,
     model: CivitaiModel | None = None,
-    max_items: int = 5,
+    max_items: int = 20,
 ) -> None:
     if not ver or not ver.images:
         return
@@ -753,6 +755,30 @@ def _upsert_example_row(
         )
 
 
+def _max_example_gallery_items(cfg: Any) -> int:
+    return clamp_max_example_images(getattr(cfg, "max_example_images", None))
+
+
+async def _fetch_civitai_cover_and_example_gallery(
+    *,
+    asset_id: int,
+    model: CivitaiModel,
+    ver: CivitaiModelVersion | None,
+    cfg: Any,
+    client: CivitaiClient,
+) -> None:
+    """Version gallery detail + cover + examples — shared by hash enrichment and post-download."""
+    ver_gallery = await _version_with_rich_image_meta(client, ver, nsfw=not cfg.hide_nsfw)
+    await _fetch_cover(asset_id, model, cfg, ver=ver)
+    await _fetch_example_media(
+        asset_id,
+        ver_gallery or ver,
+        cfg,
+        model=model,
+        max_items=_max_example_gallery_items(cfg),
+    )
+
+
 async def apply_civitai_metadata_from_download(
     asset_id: int,
     model: CivitaiModel,
@@ -776,8 +802,12 @@ async def apply_civitai_metadata_from_download(
         conn.commit()
     client = CivitaiClient(api_key=cfg.civitai_api_key, hide_early_access=cfg.hide_early_access)
     try:
-        ver_gallery = await _version_with_rich_image_meta(client, ver, nsfw=not cfg.hide_nsfw)
+        await _fetch_civitai_cover_and_example_gallery(
+            asset_id=asset_id,
+            model=model,
+            ver=ver,
+            cfg=cfg,
+            client=client,
+        )
     finally:
         await client.aclose()
-    await _fetch_cover(asset_id, model, cfg, ver=ver)
-    await _fetch_example_media(asset_id, ver_gallery or ver, cfg, model=model)

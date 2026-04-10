@@ -27,6 +27,9 @@ async function loadAll(): Promise<void> {
       if (typeof config.value.generate_video_posters !== "boolean") {
         config.value.generate_video_posters = true;
       }
+      if (typeof config.value.max_example_images !== "number" || !Number.isFinite(config.value.max_example_images)) {
+        config.value.max_example_images = 20;
+      }
     }
     baseUrlInput.value = api.getBaseUrl();
     apiKeyInput.value = "";
@@ -55,6 +58,7 @@ async function saveConfig(): Promise<void> {
       scan_on_startup: config.value.scan_on_startup,
       enrichment_mode: config.value.enrichment_mode,
       enrichment_rate_limit_ms: config.value.enrichment_rate_limit_ms,
+      max_example_images: config.value.max_example_images,
       max_parallel_downloads: config.value.max_parallel_downloads,
       download_subpath_template: config.value.download_subpath_template,
       hide_early_access: config.value.hide_early_access,
@@ -155,6 +159,21 @@ onUnmounted(() => {
         Enrichment rate limit (ms)
         <input v-model.number="config.enrichment_rate_limit_ms" class="at-input" type="number" min="200" step="100" />
       </label>
+
+      <label class="at-label">
+        Max example images per asset
+        <input
+          v-model.number="config.max_example_images"
+          class="at-input"
+          type="number"
+          min="1"
+          max="200"
+          step="1"
+        />
+      </label>
+      <p class="at-hint">
+        Gallery stills (and video slots) to download during enrichment or after a Civitai download. Range 1–200.
+      </p>
 
       <label class="at-label">
         Max parallel downloads
