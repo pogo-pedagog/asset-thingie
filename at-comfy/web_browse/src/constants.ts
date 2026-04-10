@@ -13,17 +13,109 @@ export const BROWSE_CONTENT_TYPES = [
   "Other",
 ] as const;
 
-/** Curated base models (no Civitai list endpoint). */
-export const BROWSE_BASE_MODELS = [
-  "SD 1.5",
-  "SD 2.1",
-  "SDXL 1.0",
-  "SDXL Turbo",
-  "Pony",
+/**
+ * Default Civitai ``baseModels`` filter options when the local DB is empty.
+ * Seeded from live ``GET https://civitai.com/api/v1/models`` sampling plus prior UI defaults;
+ * opportunistic SQLite merge still adds anything seen in browse traffic.
+ *
+ * Keep in sync with ``at_comfy/civitai_catalog.py`` ``FALLBACK_BASE_MODELS``.
+ */
+export const BROWSE_CIVITAI_DEFAULT_BASE_MODELS = [
+  "Anima",
+  "Chroma",
   "Flux.1 D",
+  "Flux.1 Krea",
   "Flux.1 S",
+  "Flux.2 D",
+  "Flux.2 Klein 4B",
+  "Flux.2 Klein 4B-base",
+  "Flux.2 Klein 9B",
+  "Flux.2 Klein 9B-base",
+  "HiDream",
+  "Hunyuan 1",
+  "Hunyuan Video",
+  "Illustrious",
+  "Kling",
+  "LTXV 2.3",
+  "LTXV2",
+  "NoobAI",
+  "Other",
+  "PixArt E",
+  "Pony",
+  "Qwen",
+  "SD 1.4",
+  "SD 1.5",
+  "SD 1.5 Hyper",
+  "SD 1.5 LCM",
+  "SD 2.0",
+  "SD 2.0 768",
+  "SD 2.1",
+  "SD 2.1 768",
+  "SD 3",
   "SD 3.5",
   "SD 3.5 Large",
+  "SD 3.5 Large Turbo",
+  "SD 3.5 Medium",
+  "SDXL 0.9",
+  "SDXL 1.0",
+  "SDXL 1.0 LCM",
+  "SDXL Hyper",
+  "SDXL Lightning",
+  "SDXL Turbo",
+  "Wan Image 2.7",
+  "Wan Video",
+  "Wan Video 1.3B t2v",
+  "Wan Video 14B i2v 480p",
+  "Wan Video 14B i2v 720p",
+  "Wan Video 14B t2v",
+  "Wan Video 2.2 I2V-A14B",
+  "Wan Video 2.2 TI2V-5B",
+  "ZImageBase",
+  "ZImageTurbo",
+] as const;
+
+/**
+ * Default CivArchive ``base_model`` filter options when the local DB is empty.
+ * Distinct ``base_model`` strings sampled from live ``GET https://civarchive.com/api/search``
+ * (browser UA, throttled); opportunistic SQLite merge still adds anything seen in traffic.
+ *
+ * Keep in sync with ``at_comfy/civarchive_catalog.py`` ``FALLBACK_BASE_MODELS``.
+ */
+export const BROWSE_CIVARCHIVE_DEFAULT_BASE_MODELS = [
+  "Anima",
+  "Flux.1 D",
+  "Flux.1 S",
+  "Flux.2 Klein 4B",
+  "Flux.2 Klein 4B-base",
+  "Flux.2 Klein 9B",
+  "Flux.2 Klein 9B-base",
+  "Hunyuan 1",
+  "Hunyuan Video",
+  "Illustrious",
+  "Kling",
+  "LTXV 2.3",
+  "LTXV2",
+  "NoobAI",
+  "Other",
+  "PixArt E",
+  "Pony",
+  "Qwen",
+  "SD 1.5",
+  "SD 2.0 768",
+  "SD 2.1",
+  "SD 3",
+  "SD 3.5",
+  "SD 3.5 Large",
+  "SD 3.5 Large Turbo",
+  "SD 3.5 Medium",
+  "SDXL 1.0",
+  "SDXL Turbo",
+  "Wan Image 2.7",
+  "Wan Video",
+  "Wan Video 14B i2v 480p",
+  "Wan Video 2.2 I2V-A14B",
+  "ZImageBase",
+  "ZImageTurbo",
 ] as const;
 
 export const BROWSE_SORT_OPTIONS: { value: string; label: string }[] = [
@@ -44,4 +136,19 @@ export const BROWSE_PERIOD_OPTIONS: { value: string; label: string }[] = [
   { value: "Month", label: "Month" },
   { value: "Week", label: "Week" },
   { value: "Day", label: "Day" },
+];
+
+/** CivArchive ``GET /api/search`` sort values (not Civitai sort labels). */
+export const BROWSE_CIVARCHIVE_SORT_OPTIONS: { value: string; label: string }[] = [
+  { value: "newest", label: "Newest" },
+  { value: "oldest", label: "Oldest" },
+  { value: "downloads", label: "Most downloaded" },
+  { value: "relevance", label: "Relevance" },
+  { value: "popular", label: "Popular" },
+  { value: "trending", label: "Trending" },
+   { value: "name", label: "Name" },
+  { value: "created", label: "Created" },
+  /** Tombstone ordering; use the Deleted only filter for upstream ``is_deleted=true``. */
+  { value: "deleted_newest", label: "Recently deleted" },
+  { value: "deleted_oldest", label: "Oldest deletion" },
 ];

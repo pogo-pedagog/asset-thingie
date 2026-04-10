@@ -10,6 +10,7 @@ def test_config_media_defaults() -> None:
     assert c.download_example_videos is False
     assert c.generate_video_posters is True
     assert c.max_example_images == 20
+    assert c.enrichment_civarchive_fallback is True
 
 
 def test_config_from_dict_media_flags() -> None:
@@ -17,11 +18,13 @@ def test_config_from_dict_media_flags() -> None:
         "download_example_videos": True,
         "generate_video_posters": False,
         "max_example_images": 8,
+        "enrichment_civarchive_fallback": False,
     }
     c = ATComfyConfig.from_dict(raw)
     assert c.download_example_videos is True
     assert c.generate_video_posters is False
     assert c.max_example_images == 8
+    assert c.enrichment_civarchive_fallback is False
 
 
 def test_clamp_max_example_images() -> None:

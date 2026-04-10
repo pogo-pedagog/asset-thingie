@@ -11,17 +11,12 @@ from typing import Any
 from aiohttp import web
 
 from at_comfy import scan_state
-from at_comfy.cache import cache_dir_safe_path, serve_cache_file
-from at_comfy.civitai.client import CivitaiClient, merge_models_list_pagination_url
-from at_comfy.civitai.models import (
-    CivitaiImage,
-    CivitaiModel,
-    CivitaiModelVersion,
-    ModelListPage,
-    SearchParams,
-    civitai_image_api_numeric_id,
-    normalize_civitai_image_meta_dict,
+from at_comfy.browse_sources.registry import (
+    browse_query_dict_from_request,
+    get_browse_source,
+    list_browse_source_manifests,
 )
+from at_comfy.cache import cache_dir_safe_path, serve_cache_file
 from at_comfy.config import ATComfyConfig, invalidate_config_cache, load_config, save_config
 from at_comfy.download_store import DownloadStore
 from at_comfy.downloader import Downloader
@@ -277,193 +272,159 @@ async def handle_batch_re_enrich(request: web.Request) -> web.Response:
     return web.json_response({"ok": True, "processed": processed, "failed": failed})
 
 
-def _client(cfg: ATComfyConfig) -> CivitaiClient:
-    return CivitaiClient(
-        api_key=cfg.civitai_api_key,
-        hide_early_access=cfg.hide_early_access,
+async def handle_browse_sources(_request: web.Request) -> web.Response:
+    return web.json_response({"sources": list_browse_source_manifests()})
+
+
+async def handle_browse_search_by_source(request: web.Request) -> web.Response:
+    cfg = load_config()
+    sid = (request.match_info.get("source") or "").strip()
+    try:
+        src = get_browse_source(sid, cfg, browse_limit=BROWSE_CIVITAI_LIMIT)
+    except KeyError:
+        return web.json_response({"error": "unknown source"}, status=404)
+    q = browse_query_dict_from_request(request)
+    try:
+        page = await src.search(q)
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=400)
+    return web.json_response(
+        {
+            "items": page.items,
+            "next_page": page.next_page,
+            "prev_page": page.prev_page,
+        },
     )
 
 
-def _browse_params_from_query(request: web.Request, cfg: ATComfyConfig) -> SearchParams:
-    ct = _query_all(request, "content_types") + _query_all(request, "content_type")
-    nsfw_q = (request.query.get("nsfw") or "").lower() in ("1", "true", "yes")
+async def handle_browse_page_by_source(request: web.Request) -> web.Response:
+    cfg = load_config()
+    sid = (request.match_info.get("source") or "").strip()
+    raw_url = urllib.parse.unquote(request.query.get("url") or "")
+    if not raw_url:
+        return web.json_response({"error": "missing url"}, status=400)
+    try:
+        src = get_browse_source(sid, cfg, browse_limit=BROWSE_CIVITAI_LIMIT)
+    except KeyError:
+        return web.json_response({"error": "unknown source"}, status=404)
+    q = browse_query_dict_from_request(request)
+    try:
+        page = await src.page(raw_url, q)
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=400)
+    return web.json_response(
+        {
+            "items": page.items,
+            "next_page": page.next_page,
+            "prev_page": page.prev_page,
+        },
+    )
+
+
+async def handle_browse_civarchive_base_models(_request: web.Request) -> web.Response:
+    from at_comfy.civarchive_catalog import civarchive_base_models_list
+
+    return web.json_response({"base_models": civarchive_base_models_list()})
+
+
+async def handle_browse_civarchive_base_models_reset(_request: web.Request) -> web.Response:
+    from at_comfy.civarchive_catalog import civarchive_base_models_clear, civarchive_base_models_list
+
+    civarchive_base_models_clear()
+    return web.json_response({"ok": True, "base_models": civarchive_base_models_list()})
+
+
+async def handle_browse_civitai_base_models(_request: web.Request) -> web.Response:
+    from at_comfy.civitai_catalog import civitai_base_models_list
+
+    return web.json_response({"base_models": civitai_base_models_list()})
+
+
+async def handle_browse_civitai_base_models_reset(_request: web.Request) -> web.Response:
+    from at_comfy.civitai_catalog import civitai_base_models_clear, civitai_base_models_list
+
+    civitai_base_models_clear()
+    return web.json_response({"ok": True, "base_models": civitai_base_models_list()})
+
+
+async def handle_browse_detail_by_source(request: web.Request) -> web.Response:
+    cfg = load_config()
+    sid = (request.match_info.get("source") or "").strip()
+    item_ref = urllib.parse.unquote(request.match_info.get("item_ref") or "")
+    if not item_ref:
+        return web.json_response({"error": "missing item ref"}, status=400)
+    try:
+        src = get_browse_source(sid, cfg, browse_limit=BROWSE_CIVITAI_LIMIT)
+    except KeyError:
+        return web.json_response({"error": "unknown source"}, status=404)
+    nsfw = (request.query.get("nsfw") or "").lower() in ("1", "true", "yes")
     if cfg.hide_nsfw:
-        nsfw_effective = False
-    else:
-        nsfw_effective = nsfw_q
-    return SearchParams(
-        search_term=request.query.get("q") or "",
-        search_type=request.query.get("search_type") or "model_name",  # type: ignore[arg-type]
-        content_types=ct,
-        base_models=_query_all(request, "base_models"),
-        sort=request.query.get("sort") or "Most Downloaded",  # type: ignore[arg-type]
-        period=request.query.get("period") or "All Time",  # type: ignore[arg-type]
-        nsfw=nsfw_effective,
-        limit=BROWSE_CIVITAI_LIMIT,
-    )
+        nsfw = False
+    try:
+        body = await src.detail(item_ref, nsfw=nsfw)
+        return web.json_response(body)
+    except ValueError as e:
+        return web.json_response({"error": str(e)}, status=400)
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=502)
 
 
 async def handle_browse_search(request: web.Request) -> web.Response:
+    """Legacy shim: Civitai ``/at/browse/search``."""
     cfg = load_config()
-    client = _client(cfg)
     try:
-        params = _browse_params_from_query(request, cfg)
+        src = get_browse_source("civitai", cfg, browse_limit=BROWSE_CIVITAI_LIMIT)
+        page = await src.search(browse_query_dict_from_request(request))
     except Exception as e:
         return web.json_response({"error": str(e)}, status=400)
-    try:
-        page = await client.search(params)
-        body = _model_list_page_json(page, params)
-    finally:
-        await client.aclose()
-    return web.json_response(body)
+    return web.json_response(
+        {
+            "items": page.items,
+            "next_page": page.next_page,
+            "prev_page": page.prev_page,
+        },
+    )
 
 
 async def handle_browse_page(request: web.Request) -> web.Response:
+    """Legacy shim: Civitai ``/at/browse/page``."""
     cfg = load_config()
     raw_url = urllib.parse.unquote(request.query.get("url") or "")
     if not raw_url:
         return web.json_response({"error": "missing url"}, status=400)
     try:
-        params = _browse_params_from_query(request, cfg)
-        fetch_url = merge_models_list_pagination_url(raw_url, params)
+        src = get_browse_source("civitai", cfg, browse_limit=BROWSE_CIVITAI_LIMIT)
+        page = await src.page(raw_url, browse_query_dict_from_request(request))
     except Exception as e:
         return web.json_response({"error": str(e)}, status=400)
-    client = _client(cfg)
-    try:
-        page = await client.fetch_url(fetch_url)
-        body = _model_list_page_json(page, params)
-    finally:
-        await client.aclose()
-    return web.json_response(body)
-
-
-def _model_list_page_json(page: ModelListPage, params: SearchParams | None = None) -> dict[str, Any]:
-    np = page.next_page
-    pp = page.prev_page
-    if params is not None:
-        if np:
-            np = merge_models_list_pagination_url(np, params)
-        if pp:
-            pp = merge_models_list_pagination_url(pp, params)
-    return {
-        "items": [m.model_dump(mode="json", by_alias=True) for m in page.items],
-        "next_page": np,
-        "prev_page": pp,
-    }
-
-
-def _gallery_meta_is_missing(im: CivitaiImage) -> bool:
-    m = im.meta
-    return m is None or len(m) == 0
-
-
-async def _hydrate_version_gallery_meta_from_images_api(
-    client: CivitaiClient,
-    ver: CivitaiModelVersion,
-    *,
-    nsfw: bool,
-    max_concurrent: int = 4,
-) -> CivitaiModelVersion:
-    """Fill ``images[].meta`` via ``GET /api/v1/images?imageId=`` when still empty after version fetch.
-
-    Model-version payloads often omit ``images[].id`` while ``images`` on the site have metadata;
-    Civitai encodes the public image id in the JPEG path (e.g. ``…/74821598.jpeg``).
-    """
-    slots: list[tuple[int, int]] = []
-    for idx, im in enumerate(ver.images):
-        if not _gallery_meta_is_missing(im):
-            continue
-        iid = civitai_image_api_numeric_id(explicit=im.id, url=im.url)
-        if iid is None:
-            continue
-        slots.append((idx, iid))
-    if not slots:
-        return ver
-    uniq = {iid for _, iid in slots}
-    sem_img = asyncio.Semaphore(max_concurrent)
-    by_iid: dict[int, dict[str, Any]] = {}
-
-    async def fetch_one(image_id: int) -> None:
-        async with sem_img:
-            row = await client.get_image_by_id(image_id, nsfw=nsfw)
-            if not row:
-                return
-            raw = row.get("meta")
-            if not isinstance(raw, dict):
-                return
-            norm = normalize_civitai_image_meta_dict(raw)
-            if norm:
-                by_iid[image_id] = norm
-
-    await asyncio.gather(*(fetch_one(i) for i in uniq))
-    new_images = list(ver.images)
-    for idx, iid in slots:
-        norm = by_iid.get(iid)
-        if not norm:
-            continue
-        cur = new_images[idx]
-        new_id = cur.id if cur.id is not None else iid
-        new_images[idx] = cur.model_copy(update={"meta": norm, "id": new_id})
-    return ver.model_copy(update={"images": new_images})
-
-
-async def _enrich_model_versions_with_image_meta(
-    client: CivitaiClient,
-    m: CivitaiModel,
-    *,
-    nsfw: bool,
-    max_concurrent: int = 5,
-) -> CivitaiModel:
-    """Replace list-shaped versions with ``/model-versions/{id}`` payloads (rich ``images[].meta``).
-
-    Civitai's ``GET /models`` responses often omit per-image generation metadata; the version
-    endpoint includes it (same as AssetThingie browse detail).
-    """
-    if not m.model_versions:
-        return m
-    sem = asyncio.Semaphore(max_concurrent)
-
-    async def one(v: CivitaiModelVersion) -> CivitaiModelVersion:
-        ea_flag = v.is_early_access
-        async with sem:
-            try:
-                vd = await client.get_version_detail(v.id, nsfw=nsfw)
-            except Exception as e:
-                logger.debug(
-                    "browse model enrich: version %s failed, using list payload: %s",
-                    v.id,
-                    e,
-                )
-                return v
-            try:
-                out = await _hydrate_version_gallery_meta_from_images_api(client, vd, nsfw=nsfw)
-            except Exception as e:
-                logger.debug("browse model image meta hydrate failed: %s", e)
-                out = vd
-            return out.model_copy(update={"is_early_access": ea_flag})
-
-    enriched = await asyncio.gather(*(one(v) for v in m.model_versions))
-    return m.model_copy(update={"model_versions": list(enriched)})
+    return web.json_response(
+        {
+            "items": page.items,
+            "next_page": page.next_page,
+            "prev_page": page.prev_page,
+        },
+    )
 
 
 async def handle_browse_model(request: web.Request) -> web.Response:
+    """Legacy shim: Civitai model detail by numeric id."""
     try:
         mid = int(request.match_info["model_id"])
     except (KeyError, ValueError):
         return web.json_response({"error": "bad id"}, status=400)
     cfg = load_config()
-    client = _client(cfg)
     try:
-        nsfw = (request.query.get("nsfw") or "").lower() in ("1", "true", "yes")
-        if cfg.hide_nsfw:
-            nsfw = False
-        m = await client.get_model_detail_payload(mid, nsfw=nsfw)
-        m = await _enrich_model_versions_with_image_meta(client, m, nsfw=nsfw)
-        return web.json_response(m.model_dump(mode="json", by_alias=True))
+        src = get_browse_source("civitai", cfg, browse_limit=BROWSE_CIVITAI_LIMIT)
+    except KeyError:
+        return web.json_response({"error": "unknown source"}, status=404)
+    nsfw = (request.query.get("nsfw") or "").lower() in ("1", "true", "yes")
+    if cfg.hide_nsfw:
+        nsfw = False
+    try:
+        body = await src.detail(str(mid), nsfw=nsfw)
+        return web.json_response(body)
     except Exception as e:
         return web.json_response({"error": str(e)}, status=502)
-    finally:
-        await client.aclose()
 
 
 async def handle_downloads_list(_request: web.Request) -> web.Response:
@@ -641,6 +602,14 @@ def register_all(routes: Any) -> None:
     routes.post("/at/assets/batch/re-enrich")(handle_batch_re_enrich)
     routes.get("/at/assets/{asset_id}")(handle_asset_detail)
     routes.post("/at/assets/{asset_id}/re-enrich")(handle_re_enrich_one)
+    routes.get("/at/browse/sources")(handle_browse_sources)
+    routes.get("/at/browse/civarchive/base-models")(handle_browse_civarchive_base_models)
+    routes.post("/at/browse/civarchive/base-models/reset")(handle_browse_civarchive_base_models_reset)
+    routes.get("/at/browse/civitai/base-models")(handle_browse_civitai_base_models)
+    routes.post("/at/browse/civitai/base-models/reset")(handle_browse_civitai_base_models_reset)
+    routes.get("/at/browse/{source}/search")(handle_browse_search_by_source)
+    routes.get("/at/browse/{source}/page")(handle_browse_page_by_source)
+    routes.get("/at/browse/{source}/detail/{item_ref}")(handle_browse_detail_by_source)
     routes.get("/at/browse/search")(handle_browse_search)
     routes.get("/at/browse/page")(handle_browse_page)
     routes.get("/at/browse/model/{model_id}")(handle_browse_model)
@@ -671,6 +640,14 @@ def mount_on_app(app: web.Application) -> None:
     app.router.add_post("/at/assets/batch/re-enrich", handle_batch_re_enrich)
     app.router.add_get("/at/assets/{asset_id}", handle_asset_detail)
     app.router.add_post("/at/assets/{asset_id}/re-enrich", handle_re_enrich_one)
+    app.router.add_get("/at/browse/sources", handle_browse_sources)
+    app.router.add_get("/at/browse/civarchive/base-models", handle_browse_civarchive_base_models)
+    app.router.add_post("/at/browse/civarchive/base-models/reset", handle_browse_civarchive_base_models_reset)
+    app.router.add_get("/at/browse/civitai/base-models", handle_browse_civitai_base_models)
+    app.router.add_post("/at/browse/civitai/base-models/reset", handle_browse_civitai_base_models_reset)
+    app.router.add_get("/at/browse/{source}/search", handle_browse_search_by_source)
+    app.router.add_get("/at/browse/{source}/page", handle_browse_page_by_source)
+    app.router.add_get("/at/browse/{source}/detail/{item_ref}", handle_browse_detail_by_source)
     app.router.add_get("/at/browse/search", handle_browse_search)
     app.router.add_get("/at/browse/page", handle_browse_page)
     app.router.add_get("/at/browse/model/{model_id}", handle_browse_model)

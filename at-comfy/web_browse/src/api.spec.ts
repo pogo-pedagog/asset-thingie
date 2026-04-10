@@ -60,6 +60,22 @@ describe("api", () => {
     expect(q.get("q")).toBe("x");
   });
 
+  it("buildBrowseSearchQuery encodes civarchive filter keys", () => {
+    const q = buildBrowseSearchQuery({
+      q: "a",
+      kind: "version",
+      page: 1,
+      civarchive_sort: "oldest",
+      civarchive_type: "Checkpoint",
+      civarchive_base_models: ["SD 1.5", "Pony"],
+      civarchive_tags: "foo",
+    });
+    expect(q.get("civarchive_sort")).toBe("oldest");
+    expect(q.get("civarchive_type")).toBe("Checkpoint");
+    expect(q.getAll("civarchive_base_model")).toEqual(["SD 1.5", "Pony"]);
+    expect(q.get("civarchive_tags")).toBe("foo");
+  });
+
   it("browseSearch uses /at when on Comfy (no limit in query)", async () => {
     vi.stubGlobal(
       "fetch",
@@ -78,8 +94,11 @@ describe("api", () => {
         }),
       ) as unknown as typeof fetch,
     );
-    await browseSearch({});
-    expect(fetch).toHaveBeenCalledWith(expect.stringMatching(/\/at\/browse\/search$/), expect.any(Object));
+    await browseSearch("civitai", {});
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/at\/browse\/civitai\/search$/),
+      expect.any(Object),
+    );
     const calledUrl = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
     expect(calledUrl).not.toMatch(/limit=/);
   });
@@ -102,9 +121,9 @@ describe("api", () => {
         }),
       ) as unknown as typeof fetch,
     );
-    await browsePage("https://civitai.com/api/v1/models?cursor=1", { q: "foo" });
+    await browsePage("civitai", "https://civitai.com/api/v1/models?cursor=1", { q: "foo" });
     const calledUrl = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-    expect(calledUrl).toContain("/at/browse/page?");
+    expect(calledUrl).toContain("/at/browse/civitai/page?");
     expect(calledUrl).toContain("url=");
     expect(calledUrl).toContain("q=foo");
   });

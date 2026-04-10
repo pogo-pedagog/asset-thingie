@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
+import * as api from "../api";
 import { useBrowseStore, stabilizePaginationChain } from "./browse";
+import { browseSourceOptions } from "../sources/registry";
 
 function makeItem(id: number, name = `model-${id}`) {
   return { id, name, type: "LORA", modelVersions: [] as never[] };
@@ -34,6 +36,12 @@ describe("stabilizePaginationChain", () => {
   });
 });
 
+describe("browse sources registry", () => {
+  it("includes CivArchive", () => {
+    expect(browseSourceOptions.map((o) => o.id)).toEqual(["civitai", "civarchive"]);
+  });
+});
+
 describe("browse store", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -53,7 +61,7 @@ describe("browse store", () => {
 
   it("search resets stabilization state on reset", async () => {
     const s = useBrowseStore();
-    s.lastPageItemIds = [1, 2, 3];
+    s.lastPageItemIds = ["1", "2", "3"];
     s.stoppedReason = "old";
     stubFetchWith({
       items: [makeItem(9)],
@@ -105,7 +113,7 @@ describe("browse store", () => {
     s.items = [makeItem(1)];
     s.buffer = [];
     s.nextPage = "https://civitai.com/api/v1/models?cursor=x";
-    s.lastPageItemIds = [1];
+    s.lastPageItemIds = ["1"];
 
     await s.loadMore();
     expect(s.items.length).toBeGreaterThan(1);
@@ -134,7 +142,7 @@ describe("browse store", () => {
     const s = useBrowseStore();
     s.items = [makeItem(1)];
     s.nextPage = "https://civitai.com/api/v1/models?cursor=x";
-    s.lastPageItemIds = [1];
+    s.lastPageItemIds = ["1"];
 
     await s.loadMore();
     expect(s.nextPage).toBeNull();
@@ -150,11 +158,22 @@ describe("browse store", () => {
     const s = useBrowseStore();
     s.items = [makeItem(1), makeItem(2)];
     s.nextPage = "https://civitai.com/api/v1/models?cursor=x";
-    s.lastPageItemIds = [1, 2];
+    s.lastPageItemIds = ["1", "2"];
 
     await s.loadMore();
     expect(s.nextPage).toBeNull();
     expect(s.stoppedReason).toMatch(/same page/i);
+  });
+
+  it("preserves query state per source when switching", () => {
+    const s = useBrowseStore();
+    s.q = "pony";
+    s.setActiveSource("civarchive");
+    s.q = "mixplin";
+    s.setActiveSource("civitai");
+    expect(s.q).toBe("pony");
+    s.setActiveSource("civarchive");
+    expect(s.q).toBe("mixplin");
   });
 
   it("searchParams reflects hide_nsfw: nsfw false when hideNsfwFromConfig is true", () => {
@@ -169,12 +188,68 @@ describe("browse store", () => {
     expect(s.searchParams().nsfw).toBe(true);
   });
 
+  it("searchParams for CivArchive sends civarchive_* fields and omits Civitai sort", () => {
+    const s = useBrowseStore();
+    s.setActiveSource("civarchive");
+    s.q = "lora";
+    s.civarchiveKind = "version";
+    s.civarchivePage = 2;
+    s.civarchiveSort = "downloads";
+    s.civarchiveType = "LORA";
+    s.civarchiveBaseModels = ["SD 1.5", "Pony"];
+    s.civarchiveTags = "anime";
+    const p = s.searchParams();
+    expect(p.kind).toBe("version");
+    expect(p.page).toBe(2);
+    expect(p.civarchive_sort).toBe("downloads");
+    expect(p.civarchive_type).toBe("LORA");
+    expect(p.civarchive_base_models).toEqual(["SD 1.5", "Pony"]);
+    expect(p.civarchive_tags).toBe("anime");
+    expect(p.sort).toBeUndefined();
+    expect(p.search_type).toBeUndefined();
+  });
+
+  it("searchParams for CivArchive omits optional keys when empty", () => {
+    const s = useBrowseStore();
+    s.setActiveSource("civarchive");
+    s.civarchiveSort = "newest";
+    s.civarchiveType = "";
+    s.civarchiveBaseModels = [];
+    s.civarchiveTags = "";
+    const p = s.searchParams();
+    expect(p.civarchive_sort).toBe("newest");
+    expect(p.civarchive_type).toBeUndefined();
+    expect(p.civarchive_base_models).toBeUndefined();
+    expect(p.civarchive_tags).toBeUndefined();
+    expect(p.civarchive_deleted_only).toBeUndefined();
+  });
+
+  it("searchParams for CivArchive sends deleted-only and civarchive_nsfw when NSFW allowed", () => {
+    const s = useBrowseStore();
+    s.setActiveSource("civarchive");
+    s.hideNsfwFromConfig = false;
+    s.civarchiveDeletedOnly = true;
+    s.civarchiveNsfw = "sfw";
+    const p = s.searchParams();
+    expect(p.civarchive_deleted_only).toBe(true);
+    expect(p.civarchive_nsfw).toBe("sfw");
+  });
+
+  it("searchParams for CivArchive omits civarchive_nsfw when NSFW hidden", () => {
+    const s = useBrowseStore();
+    s.setActiveSource("civarchive");
+    s.hideNsfwFromConfig = true;
+    s.civarchiveNsfw = "nsfw";
+    const p = s.searchParams();
+    expect(p.civarchive_nsfw).toBeUndefined();
+  });
+
   it("toggleBatchId adds and removes", () => {
     const s = useBrowseStore();
     s.toggleBatchId(5);
-    expect(s.batchIds.has(5)).toBe(true);
+    expect(s.batchIds.has("5")).toBe(true);
     s.toggleBatchId(5);
-    expect(s.batchIds.has(5)).toBe(false);
+    expect(s.batchIds.has("5")).toBe(false);
   });
 
   it("setBatchMode clears selection when disabled", () => {
@@ -183,6 +258,49 @@ describe("browse store", () => {
     s.setBatchMode(false);
     expect(s.batchMode).toBe(false);
     expect(s.batchIds.size).toBe(0);
+  });
+
+  it("openResult on CivArchive user hit scopes search by username", async () => {
+    const s = useBrowseStore();
+    s.setActiveSource("civarchive");
+    const searchSpy = vi.spyOn(api, "browseSearch").mockResolvedValue({
+      items: [],
+      next_page: null,
+      prev_page: null,
+    });
+    await s.openResult({
+      id: "user:tester",
+      name: "Tester",
+      type: "User",
+      civarchiveHitKind: "user",
+      creator_username: "tester",
+    });
+    expect(s.q).toBe("tester");
+    expect(s.civarchiveKind).toBe("version");
+    expect(searchSpy).toHaveBeenCalled();
+    const params = searchSpy.mock.calls[0]![1]!;
+    expect(params.kind).toBe("version");
+    expect(params.q).toBe("tester");
+    searchSpy.mockRestore();
+  });
+
+  it("openResult opens detail for non-user CivArchive rows", async () => {
+    const s = useBrowseStore();
+    s.setActiveSource("civarchive");
+    const detailSpy = vi.spyOn(api, "browseDetail").mockResolvedValue({
+      id: 1,
+      name: "M",
+      type: "LORA",
+      modelVersions: [],
+    });
+    await s.openResult({
+      id: "sha256:" + "a".repeat(64),
+      name: "File",
+      type: "LORA",
+      civarchiveHitKind: "file",
+    });
+    expect(detailSpy).toHaveBeenCalledWith("civarchive", "sha256:" + "a".repeat(64), expect.any(Boolean));
+    detailSpy.mockRestore();
   });
 
   it("concurrent search: first result is discarded when second search starts", async () => {
@@ -222,7 +340,7 @@ describe("browse store", () => {
     s.items = [makeItem(1)];
     s.buffer = [];
     s.nextPage = "https://civitai.com/api/v1/models?cursor=x";
-    s.lastPageItemIds = [1];
+    s.lastPageItemIds = ["1"];
 
     let resolvePage!: (v: Response) => void;
     let resolveSearch!: (v: Response) => void;
@@ -254,7 +372,7 @@ describe("browse store", () => {
     );
     await searchP;
 
-    expect(s.lastPageItemIds).toEqual([301]);
+    expect(s.lastPageItemIds).toEqual(["301"]);
     expect(s.items.map((i) => i.id)).toContain(301);
   });
 });

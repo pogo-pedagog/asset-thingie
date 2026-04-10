@@ -1,3 +1,4 @@
+import type { BrowseSourceId } from "./sources/types";
 import type { CivitaiBrowseResponse, DownloadTaskRow, FiltersResponse, AtComfyPublicConfig } from "./types";
 
 export const STORAGE_URL_KEY = "at_assetthingie_url";
@@ -61,6 +62,20 @@ export interface BrowseSearchParams {
   sort?: string;
   period?: string;
   nsfw?: boolean;
+  /** CivArchive ``/api/search`` kind filter (version | file | user). */
+  kind?: string;
+  /** CivArchive page index (1-based). */
+  page?: string | number;
+  /** CivArchive-only: ``sort`` query param for ``/api/search`` (newest | oldest | downloads). */
+  civarchive_sort?: string;
+  civarchive_type?: string;
+  /** CivArchive ``base_model`` filter; multiple values are joined upstream with commas (OR). */
+  civarchive_base_models?: string[];
+  civarchive_tags?: string;
+  /** When true, upstream ``is_deleted=true`` (tombstoned rows only). */
+  civarchive_deleted_only?: boolean;
+  /** CivArchive NSFW filter when browse config allows NSFW: ``all`` \| ``sfw`` \| ``nsfw``. */
+  civarchive_nsfw?: "all" | "sfw" | "nsfw";
 }
 
 export function buildBrowseSearchQuery(p: BrowseSearchParams): URLSearchParams {
@@ -76,6 +91,17 @@ export function buildBrowseSearchQuery(p: BrowseSearchParams): URLSearchParams {
   if (p.sort) sp.set("sort", p.sort);
   if (p.period) sp.set("period", p.period);
   if (p.nsfw) sp.set("nsfw", "true");
+  if (p.kind?.trim()) sp.set("kind", p.kind.trim());
+  if (p.page != null && String(p.page).trim() !== "") sp.set("page", String(p.page));
+  if (p.civarchive_sort?.trim()) sp.set("civarchive_sort", p.civarchive_sort.trim());
+  if (p.civarchive_type?.trim()) sp.set("civarchive_type", p.civarchive_type.trim());
+  for (const bm of p.civarchive_base_models ?? []) {
+    const s = String(bm).trim();
+    if (s) sp.append("civarchive_base_model", s);
+  }
+  if (p.civarchive_tags?.trim()) sp.set("civarchive_tags", p.civarchive_tags.trim());
+  if (p.civarchive_deleted_only) sp.set("civarchive_deleted_only", "1");
+  if (p.civarchive_nsfw) sp.set("civarchive_nsfw", p.civarchive_nsfw);
   return sp;
 }
 
@@ -83,20 +109,53 @@ export async function fetchHealth(): Promise<{ ok: boolean }> {
   return fetchJson(`${getApiPrefix()}/health`);
 }
 
-export async function browseSearch(params: BrowseSearchParams): Promise<CivitaiBrowseResponse> {
+export async function browseSearch(
+  source: BrowseSourceId,
+  params: BrowseSearchParams,
+): Promise<CivitaiBrowseResponse> {
   const q = buildBrowseSearchQuery(params).toString();
-  return fetchJson(`${getApiPrefix()}/browse/search${q ? `?${q}` : ""}`);
+  return fetchJson(`${getApiPrefix()}/browse/${source}/search${q ? `?${q}` : ""}`);
 }
 
-export async function browsePage(urlParam: string, params: BrowseSearchParams): Promise<CivitaiBrowseResponse> {
+export async function browsePage(
+  source: BrowseSourceId,
+  urlParam: string,
+  params: BrowseSearchParams,
+): Promise<CivitaiBrowseResponse> {
   const sp = buildBrowseSearchQuery(params);
   sp.set("url", urlParam);
-  return fetchJson(`${getApiPrefix()}/browse/page?${sp.toString()}`);
+  return fetchJson(`${getApiPrefix()}/browse/${source}/page?${sp.toString()}`);
 }
 
-export async function browseModel(modelId: number, nsfw = false): Promise<Record<string, unknown>> {
+export async function fetchCivarchiveBaseModels(): Promise<{ base_models: string[] }> {
+  return fetchJson(`${getApiPrefix()}/browse/civarchive/base-models`);
+}
+
+export async function postCivarchiveBaseModelsReset(): Promise<{ ok: boolean; base_models: string[] }> {
+  return fetchJson(`${getApiPrefix()}/browse/civarchive/base-models/reset`, { method: "POST" });
+}
+
+export async function fetchCivitaiBaseModels(): Promise<{ base_models: string[] }> {
+  return fetchJson(`${getApiPrefix()}/browse/civitai/base-models`);
+}
+
+export async function postCivitaiBaseModelsReset(): Promise<{ ok: boolean; base_models: string[] }> {
+  return fetchJson(`${getApiPrefix()}/browse/civitai/base-models/reset`, { method: "POST" });
+}
+
+export async function browseDetail(
+  source: BrowseSourceId,
+  itemRef: string,
+  nsfw = false,
+): Promise<Record<string, unknown>> {
+  const enc = encodeURIComponent(itemRef);
   const q = nsfw ? "?nsfw=true" : "";
-  return fetchJson(`${getApiPrefix()}/browse/model/${modelId}${q}`);
+  return fetchJson(`${getApiPrefix()}/browse/${source}/detail/${enc}${q}`);
+}
+
+/** @deprecated Prefer ``browseDetail("civitai", String(modelId), nsfw)``. */
+export async function browseModel(modelId: number, nsfw = false): Promise<Record<string, unknown>> {
+  return browseDetail("civitai", String(modelId), nsfw);
 }
 
 export async function fetchFilters(params?: { family?: string }): Promise<FiltersResponse> {

@@ -31,6 +31,15 @@ export interface CivitaiImageSummary {
   id?: number | null;
 }
 
+export interface CivArchiveMirrorRow {
+  source?: string;
+  url?: string;
+  filename?: string;
+  is_gated?: boolean;
+  is_paid?: boolean;
+  deletedAt?: unknown;
+}
+
 export interface CivitaiFileSummary {
   id: number;
   name: string;
@@ -42,6 +51,8 @@ export interface CivitaiFileSummary {
   primary?: boolean;
   sizeKB?: number | null;
   sha256?: string | null;
+  /** CivArchive file rows include mirror candidates (LoRA Manager–style). */
+  mirrors?: CivArchiveMirrorRow[];
 }
 
 export interface CivitaiVersionSummary {
@@ -55,9 +66,23 @@ export interface CivitaiVersionSummary {
   isEarlyAccess?: boolean;
 }
 
+/** Optional CivArchive extras on normalized browse/detail payloads. */
+export interface BrowseSourceSections {
+  mirrors?: CivArchiveMirrorRow[];
+  sha256?: string | null;
+  platform?: string;
+}
+
 /** One row from ``/at/browse/search`` (full Civitai model JSON). */
 export interface CivitaiBrowseItem {
-  id: number;
+  /** Civititai numeric id, or opaque string (e.g. CivArchive ``model:…:version:…``). */
+  id: number | string;
+  /** Set when this row comes from CivArchive search normalization. */
+  source?: string;
+  /** CivArchive search hit kind (version | file | user). */
+  civarchiveHitKind?: "version" | "file" | "user";
+  /** Top-level preview URL from CivArchive search hits. */
+  image_url?: string | null;
   name: string;
   type: string;
   nsfw?: boolean;
@@ -80,6 +105,10 @@ export interface CivitaiModelDetail extends CivitaiBrowseItem {
   modelVersions: CivitaiVersionSummary[];
   allowCommercialUse?: string[];
   allowNoCredit?: boolean;
+  /** Backend multi-source marker + extra sections (e.g. CivArchive mirrors). */
+  source?: string;
+  itemRef?: string;
+  sourceSections?: BrowseSourceSections;
 }
 
 export interface DownloadTaskRow {
@@ -123,5 +152,6 @@ export interface AtComfyPublicConfig {
   hide_nsfw: boolean;
   download_example_videos: boolean;
   generate_video_posters: boolean;
+  enrichment_civarchive_fallback: boolean;
   scan_directories: Record<string, string | null>;
 }

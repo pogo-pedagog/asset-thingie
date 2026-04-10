@@ -27,6 +27,9 @@ async function loadAll(): Promise<void> {
       if (typeof config.value.generate_video_posters !== "boolean") {
         config.value.generate_video_posters = true;
       }
+      if (typeof config.value.enrichment_civarchive_fallback !== "boolean") {
+        config.value.enrichment_civarchive_fallback = true;
+      }
       if (typeof config.value.max_example_images !== "number" || !Number.isFinite(config.value.max_example_images)) {
         config.value.max_example_images = 20;
       }
@@ -65,6 +68,7 @@ async function saveConfig(): Promise<void> {
       hide_nsfw: config.value.hide_nsfw,
       download_example_videos: config.value.download_example_videos,
       generate_video_posters: config.value.generate_video_posters,
+      enrichment_civarchive_fallback: config.value.enrichment_civarchive_fallback,
     };
     if (apiKeyInput.value.trim()) body.civitai_api_key = apiKeyInput.value.trim();
     config.value = await api.putConfig(body);
@@ -93,6 +97,36 @@ async function triggerEnrich(): Promise<void> {
     enrichStatus.value = await api.fetchEnrichStatus();
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Enrich failed";
+  }
+}
+
+async function resetCivarchiveBaseModels(): Promise<void> {
+  if (
+    !confirm(
+      "Clear the CivArchive base model list learned from search? The dropdown will fall back to defaults until new searches add names again.",
+    )
+  ) {
+    return;
+  }
+  try {
+    await api.postCivarchiveBaseModelsReset();
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Reset failed";
+  }
+}
+
+async function resetCivitaiBaseModels(): Promise<void> {
+  if (
+    !confirm(
+      "Clear the Civitai base model list learned from browse? The dropdown will fall back to defaults until new searches add names again.",
+    )
+  ) {
+    return;
+  }
+  try {
+    await api.postCivitaiBaseModelsReset();
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Reset failed";
   }
 }
 
@@ -160,6 +194,11 @@ onUnmounted(() => {
         <input v-model.number="config.enrichment_rate_limit_ms" class="at-input" type="number" min="200" step="100" />
       </label>
 
+      <label class="at-label at-label--row">
+        <input v-model="config.enrichment_civarchive_fallback" type="checkbox" />
+        When Civitai hash lookup misses, try CivArchive (SHA index)
+      </label>
+
       <label class="at-label">
         Max example images per asset
         <input
@@ -194,6 +233,17 @@ onUnmounted(() => {
         <input v-model="config.hide_nsfw" type="checkbox" />
         Hide NSFW from Civitai (browse search, detail, and related API calls)
       </label>
+
+      <p class="at-hint">
+        Browse accumulates <strong>base model</strong> strings from Civitai / CivArchive search results into SQLite. Use
+        reset if a dropdown grows stale.
+      </p>
+      <button type="button" class="at-btn at-btn--ghost" @click="resetCivarchiveBaseModels">
+        Reset CivArchive base model list
+      </button>
+      <button type="button" class="at-btn at-btn--ghost" @click="resetCivitaiBaseModels">
+        Reset Civitai base model list
+      </button>
 
       <label class="at-label at-label--row">
         <input v-model="config.download_example_videos" type="checkbox" />

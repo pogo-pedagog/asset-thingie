@@ -46,6 +46,7 @@ async def test_enqueue_from_body_creates_task(tmp_comfy_base, monkeypatch) -> No
         async def aclose(self):
             return None
 
+    monkeypatch.setattr("at_comfy.download_sources.civitai.CivitaiClient", FakeClient)
     monkeypatch.setattr("at_comfy.downloader.CivitaiClient", FakeClient)
 
     dlr = Downloader()
@@ -80,6 +81,7 @@ async def test_enqueue_rejects_bad_version(tmp_comfy_base, monkeypatch) -> None:
         async def aclose(self):
             return None
 
+    monkeypatch.setattr("at_comfy.download_sources.civitai.CivitaiClient", FakeClient)
     monkeypatch.setattr("at_comfy.downloader.CivitaiClient", FakeClient)
     dlr = Downloader()
     cfg = ATComfyConfig()
