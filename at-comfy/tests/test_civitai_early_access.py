@@ -6,7 +6,6 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 import pytest
-
 from at_comfy.civitai.client import (
     _collect_excluded_early_access_variants,
     _filter_early_access,
