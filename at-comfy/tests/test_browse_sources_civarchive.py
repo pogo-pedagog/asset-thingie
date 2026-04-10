@@ -6,7 +6,6 @@ from dataclasses import replace
 
 import pytest
 from aiohttp.test_utils import TestClient, TestServer
-
 from at_comfy.config import load_config
 from at_comfy.routes import create_test_app
 
@@ -33,14 +32,14 @@ async def test_browse_civarchive_search_next_page(tmp_comfy_base, monkeypatch) -
     }
 
     class FakeClient:
-        async def search(self, **kwargs):  # noqa: ANN003
+        async def search(self, **kwargs):
             assert kwargs.get("kind") == "version"
             assert kwargs.get("page") == 1
             assert kwargs.get("sort") == "newest"
             assert kwargs.get("is_nsfw") is False
             return {"results": [hit] * 50, "hits": 50, "totalHits": 150}
 
-        async def get_model(self, mid, model_version_id=None):  # noqa: ANN001
+        async def get_model(self, mid, model_version_id=None):
             return {
                 "id": mid,
                 "name": "M",
@@ -66,7 +65,7 @@ async def test_browse_civarchive_search_next_page(tmp_comfy_base, monkeypatch) -
                 },
             }
 
-        async def get_by_sha256(self, hx):  # noqa: ANN001
+        async def get_by_sha256(self, hx):
             return {"model": {"id": 10, "version": {"id": 2}}}
 
         async def aclose(self) -> None:
@@ -102,7 +101,7 @@ async def test_browse_civarchive_search_file_hit_uses_sha256_ref(tmp_comfy_base,
     }
 
     class FakeClient:
-        async def search(self, **kwargs):  # noqa: ANN003
+        async def search(self, **kwargs):
             return {"results": [hit], "hits": 1, "totalHits": 1}
 
         async def aclose(self) -> None:
@@ -135,7 +134,7 @@ async def test_browse_civarchive_search_user_hit_is_navigational_ref(tmp_comfy_b
     }
 
     class FakeClient:
-        async def search(self, **kwargs):  # noqa: ANN003
+        async def search(self, **kwargs):
             return {"results": [hit], "hits": 1, "totalHits": 1}
 
         async def aclose(self) -> None:
@@ -177,10 +176,10 @@ async def test_browse_civarchive_detail_sha256_refetches_model(tmp_comfy_base, m
     calls: list[str] = []
 
     class FakeClient:
-        async def search(self, **kwargs):  # noqa: ANN003
+        async def search(self, **kwargs):
             return {"results": [], "hits": 0, "totalHits": 0}
 
-        async def get_model(self, mid, model_version_id=None):  # noqa: ANN001
+        async def get_model(self, mid, model_version_id=None):
             calls.append(f"model:{mid}:{model_version_id}")
             return {
                 "id": mid,
@@ -208,7 +207,7 @@ async def test_browse_civarchive_detail_sha256_refetches_model(tmp_comfy_base, m
                 },
             }
 
-        async def get_by_sha256(self, hx):  # noqa: ANN001
+        async def get_by_sha256(self, hx):
             calls.append("sha256")
             return {"model": {"id": 5, "version": {"id": 6}}}  # compact
 
@@ -236,7 +235,7 @@ async def test_browse_civarchive_search_forwards_filter_params(tmp_comfy_base, m
     captured: dict[str, object] = {}
 
     class FakeClient:
-        async def search(self, **kwargs):  # noqa: ANN003
+        async def search(self, **kwargs):
             captured.clear()
             captured.update(kwargs)
             return {"results": [], "hits": 0, "totalHits": 0}
@@ -274,7 +273,7 @@ async def test_browse_civarchive_search_joins_multiple_base_models(tmp_comfy_bas
     captured: dict[str, object] = {}
 
     class FakeClient:
-        async def search(self, **kwargs):  # noqa: ANN003
+        async def search(self, **kwargs):
             captured.clear()
             captured.update(kwargs)
             return {"results": [], "hits": 0, "totalHits": 0}
@@ -301,7 +300,7 @@ async def test_browse_civarchive_deleted_only_sets_is_deleted(tmp_comfy_base, mo
     captured: dict[str, object] = {}
 
     class FakeClient:
-        async def search(self, **kwargs):  # noqa: ANN003
+        async def search(self, **kwargs):
             captured.clear()
             captured.update(kwargs)
             return {"results": [], "hits": 0, "totalHits": 0}
@@ -325,7 +324,7 @@ async def test_browse_civarchive_omits_is_deleted_by_default(tmp_comfy_base, mon
     captured: dict[str, object] = {}
 
     class FakeClient:
-        async def search(self, **kwargs):  # noqa: ANN003
+        async def search(self, **kwargs):
             captured.update(kwargs)
             return {"results": [], "hits": 0, "totalHits": 0}
 
@@ -348,7 +347,7 @@ async def test_browse_civarchive_nsfw_sfw_forces_upstream_false(tmp_comfy_base, 
     captured: dict[str, object] = {}
 
     class FakeClient:
-        async def search(self, **kwargs):  # noqa: ANN003
+        async def search(self, **kwargs):
             captured.update(kwargs)
             return {"results": [], "hits": 0, "totalHits": 0}
 
@@ -377,7 +376,7 @@ async def test_browse_civarchive_sort_passthrough_relevance(tmp_comfy_base, monk
     captured: dict[str, object] = {}
 
     class FakeClient:
-        async def search(self, **kwargs):  # noqa: ANN003
+        async def search(self, **kwargs):
             captured.update(kwargs)
             return {"results": [], "hits": 0, "totalHits": 0}
 
@@ -400,7 +399,7 @@ async def test_browse_civarchive_deleted_sort_without_checkbox_omits_is_deleted(
     captured: dict[str, object] = {}
 
     class FakeClient:
-        async def search(self, **kwargs):  # noqa: ANN003
+        async def search(self, **kwargs):
             captured.update(kwargs)
             return {"results": [], "hits": 0, "totalHits": 0}
 
@@ -426,7 +425,7 @@ async def test_browse_civarchive_invalid_sort_falls_back(tmp_comfy_base, monkeyp
     captured: dict[str, object] = {}
 
     class FakeClient:
-        async def search(self, **kwargs):  # noqa: ANN003
+        async def search(self, **kwargs):
             captured.update(kwargs)
             return {"results": [], "hits": 0, "totalHits": 0}
 
@@ -463,7 +462,7 @@ async def test_browse_civarchive_upserts_base_models_from_hits(tmp_comfy_base, m
     }
 
     class FakeClient:
-        async def search(self, **kwargs):  # noqa: ANN003
+        async def search(self, **kwargs):
             return {"results": [hit], "hits": 1, "totalHits": 1}
 
         async def aclose(self) -> None:
@@ -493,7 +492,7 @@ async def test_browse_civarchive_base_models_get_includes_fallback(tmp_comfy_bas
 
 @pytest.mark.asyncio
 async def test_browse_civarchive_base_models_reset_clears_learned(tmp_comfy_base, monkeypatch) -> None:
-    from at_comfy.civarchive_catalog import civarchive_base_models_upsert_batch, civarchive_base_models_list
+    from at_comfy.civarchive_catalog import civarchive_base_models_list, civarchive_base_models_upsert_batch
 
     civarchive_base_models_upsert_batch(["ZZZ Custom Learned"])
     assert any(n == "ZZZ Custom Learned" for n in civarchive_base_models_list())

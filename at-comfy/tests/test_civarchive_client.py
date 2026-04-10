@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import pytest
 import httpx
-
+import pytest
 from at_comfy.civarchive_client import CivArchiveClient
 
 

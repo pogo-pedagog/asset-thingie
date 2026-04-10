@@ -11,6 +11,8 @@ from typing import Any
 
 import httpx
 
+from at_comfy.civarchive_client import CivArchiveClient
+from at_comfy.civarchive_payload import civarchive_mid_vid_from_sha_payload, normalize_civarchive_detail
 from at_comfy.civitai.client import (
     CivitaiClient,
     civitai_download_headers,
@@ -20,8 +22,6 @@ from at_comfy.civitai.client import (
     civitai_image_url_with_width,
 )
 from at_comfy.civitai.models import CivitaiModel, CivitaiModelVersion
-from at_comfy.civarchive_client import CivArchiveClient
-from at_comfy.civarchive_payload import civarchive_mid_vid_from_sha_payload, normalize_civarchive_detail
 from at_comfy.config import cache_root, clamp_max_example_images
 from at_comfy.db import get_conn
 from at_comfy.media_processing import (
@@ -539,7 +539,6 @@ async def _fetch_example_media(
     now = _utc_now_iso()
     sort_order = 0
     count = 0
-    idx = 0
 
     async with httpx.AsyncClient(timeout=180.0, follow_redirects=True) as c:
         for im in ver.images:
@@ -551,9 +550,9 @@ async def _fetch_example_media(
                 continue
 
             if raw_type == "image":
-                idx += 1
-                base_name = f"{idx:03d}.jpg"
-                thumb_name = f"{idx:03d}.thumb.jpg"
+                slot = count + 1
+                base_name = f"{slot:03d}.jpg"
+                thumb_name = f"{slot:03d}.thumb.jpg"
                 full_img = ex_root / base_name
                 full_thumb = ex_root / thumb_name
                 u_orig = civitai_image_original_fetch_url(im.url, natural_width=im.width)
@@ -619,11 +618,11 @@ async def _fetch_example_media(
             elif raw_type == "video":
                 if not cfg.download_example_videos and not cfg.generate_video_posters:
                     continue
-                idx += 1
+                slot = count + 1
                 ext = video_extension_from_url(vu)
-                play_name = f"{idx:03d}{ext}"
-                poster_name = f"{idx:03d}.poster.jpg"
-                thumb_name = f"{idx:03d}.thumb.jpg"
+                play_name = f"{slot:03d}{ext}"
+                poster_name = f"{slot:03d}.poster.jpg"
+                thumb_name = f"{slot:03d}.thumb.jpg"
                 video_path = ex_root / play_name
                 poster_path = ex_root / poster_name
                 thumb_path = ex_root / thumb_name

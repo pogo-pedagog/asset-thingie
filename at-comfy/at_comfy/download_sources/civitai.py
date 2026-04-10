@@ -27,7 +27,7 @@ async def prepare_civitai_download(body: dict[str, Any], cfg: ATComfyConfig) -> 
         hide_early_access=cfg.hide_early_access,
     )
     try:
-        model = await client.get_model(mid, nsfw=cfg.hide_nsfw is False)
+        model = await client.get_model(mid, nsfw=not cfg.hide_nsfw)
     finally:
         await client.aclose()
 

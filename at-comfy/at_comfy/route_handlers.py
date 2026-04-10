@@ -11,7 +11,11 @@ from typing import Any
 from aiohttp import web
 
 from at_comfy import scan_state
-from at_comfy.browse_sources.registry import browse_query_dict_from_request, get_browse_source, list_browse_source_manifests
+from at_comfy.browse_sources.registry import (
+    browse_query_dict_from_request,
+    get_browse_source,
+    list_browse_source_manifests,
+)
 from at_comfy.cache import cache_dir_safe_path, serve_cache_file
 from at_comfy.config import ATComfyConfig, invalidate_config_cache, load_config, save_config
 from at_comfy.download_store import DownloadStore

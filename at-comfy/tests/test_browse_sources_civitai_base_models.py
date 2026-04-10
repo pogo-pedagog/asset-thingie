@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import pytest
 from aiohttp.test_utils import TestClient, TestServer
-
 from at_comfy.civitai.models import CivitaiModel, ModelListPage
-from at_comfy.routes import create_test_app
 from at_comfy.route_handlers import BROWSE_CIVITAI_LIMIT
+from at_comfy.routes import create_test_app
 
 
 @pytest.mark.asyncio
@@ -31,7 +30,7 @@ async def test_browse_civitai_search_upserts_base_models_from_versions(tmp_comfy
         def __init__(self, *a, **k):
             pass
 
-        async def search(self, params):  # noqa: ANN001
+        async def search(self, params):
             assert params.limit == BROWSE_CIVITAI_LIMIT
             return ModelListPage(items=[sample], metadata={})
 
@@ -66,7 +65,7 @@ async def test_browse_civitai_page_upserts_base_models(tmp_comfy_base, monkeypat
         def __init__(self, *a, **k):
             pass
 
-        async def fetch_url(self, url: str):  # noqa: ANN003
+        async def fetch_url(self, url: str):
             assert "civitai.com" in url or url.startswith("http")
             return ModelListPage(items=[sample], metadata={})
 

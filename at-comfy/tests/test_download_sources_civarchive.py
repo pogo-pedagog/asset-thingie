@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from at_comfy.config import ATComfyConfig
 from at_comfy.download_sources.civarchive import prepare_civarchive_download
 
@@ -25,7 +24,7 @@ async def test_prepare_prefers_non_civitai_mirrors_first(monkeypatch) -> None:
     }
 
     class FakeClient:
-        async def get_model(self, mid, model_version_id=None):  # noqa: ANN001
+        async def get_model(self, mid, model_version_id=None):
             return {
                 "id": mid,
                 "name": "M",
@@ -79,7 +78,7 @@ async def test_prepare_preferred_mirror_moves_match_to_front(monkeypatch) -> Non
     }
 
     class FakeClient:
-        async def get_model(self, mid, model_version_id=None):  # noqa: ANN001
+        async def get_model(self, mid, model_version_id=None):
             return {
                 "id": mid,
                 "name": "M",
@@ -129,7 +128,7 @@ async def test_prepare_preferred_mirror_accepts_site_relative_url(monkeypatch) -
     }
 
     class FakeClient:
-        async def get_model(self, mid, model_version_id=None):  # noqa: ANN001
+        async def get_model(self, mid, model_version_id=None):
             return {
                 "id": mid,
                 "name": "M",

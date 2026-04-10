@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from at_comfy.db import get_conn
 
@@ -64,7 +64,7 @@ FALLBACK_BASE_MODELS: tuple[str, ...] = (
 
 
 def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 def civitai_base_models_upsert_batch(names: Iterable[str]) -> None:
