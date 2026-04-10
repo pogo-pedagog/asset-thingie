@@ -1,3 +1,4 @@
+import { resolveMediaSrc as resolveMediaSrcWithOrigin } from "../../web_shared/media";
 import type { AssetDetail, AssetsResponse, FiltersResponse, SubfoldersResponse } from "./types";
 
 export const STORAGE_URL_KEY = "at_assetthingie_url";
@@ -178,11 +179,14 @@ export async function fetchAssets(params: AssetQueryParams): Promise<AssetsRespo
 }
 
 export function resolveCoverSrc(coverUrl: string | null | undefined): string | null {
-  if (!coverUrl) return null;
-  if (coverUrl.startsWith("http://") || coverUrl.startsWith("https://")) {
-    return coverUrl;
-  }
-  return `${getRequestOrigin()}${coverUrl.startsWith("/") ? "" : "/"}${coverUrl}`;
+  return resolveMediaSrcWithOrigin(coverUrl, getRequestOrigin(), true);
+}
+
+export function resolveMediaSrc(
+  coverUrl: string | null | undefined,
+  allowRemote: boolean,
+): string | null {
+  return resolveMediaSrcWithOrigin(coverUrl, getRequestOrigin(), allowRemote);
 }
 
 export async function fetchAssetDetail(assetId: number): Promise<AssetDetail> {

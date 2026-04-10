@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 
 import pytest
@@ -145,5 +146,130 @@ def test_schema_v3_backfills_playback_when_local_path_is_video_file(
         ).fetchone()
         assert row["playback_local_path"] == "001.webm"
         assert row["poster_local_path"] is None
+    finally:
+        conn.close()
+
+
+def test_schema_v3_backfill_warns_when_poster_has_no_video(
+    tmp_path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    base = tmp_path / "comfy3"
+    base.mkdir(parents=True)
+    monkeypatch.setattr("at_comfy.config.comfy_base_path", lambda: base.resolve())
+
+    db_file = base / "at.db"
+    conn = sqlite3.connect(str(db_file))
+    try:
+        conn.row_factory = sqlite3.Row
+        _schema_v1(conn)
+        _schema_v2(conn)
+        _set_user_version(conn, 2)
+        now = "2026-01-01T00:00:00Z"
+        conn.execute(
+            """
+            INSERT INTO library_files (
+                path, filename, stem, sha256, content_type, family, file_size_bytes, mtime, scanned_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (str(base / "m.sft"), "m.sft", "m", "h", "LORA", "lora", 1, 1.0, now),
+        )
+        conn.execute(
+            """
+            INSERT INTO library_assets (
+                primary_path, display_name, content_type, family, trigger_words, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (str(base / "m.sft"), "M", "LORA", "lora", "[]", now, now),
+        )
+        aid = int(conn.execute("SELECT asset_id FROM library_assets LIMIT 1").fetchone()[0])
+        ex_dir = base / "at_cache" / "examples" / str(aid)
+        ex_dir.mkdir(parents=True)
+        # Poster on disk but no 007.{mp4,webm,mov,mkv} — backfill must not guess and should log.
+
+        conn.execute(
+            """
+            INSERT INTO example_media (
+                asset_id, media_type, origin_type, local_path, source_url,
+                width, height, caption, metadata_json, sort_order,
+                thumbnail_local_path, created_at
+            ) VALUES (?, 'video', 'civitai', '007.poster.jpg', 'https://c.test/x.mp4',
+                640, 480, NULL, NULL, 0, NULL, ?)
+            """,
+            (aid, now),
+        )
+        conn.commit()
+
+        with caplog.at_level(logging.WARNING):
+            migrate(conn)
+        row = conn.execute(
+            "SELECT playback_local_path, poster_local_path FROM example_media WHERE asset_id = ?",
+            (aid,),
+        ).fetchone()
+        assert row["poster_local_path"] == "007.poster.jpg"
+        assert row["playback_local_path"] is None
+        assert "no matching video file" in caplog.text
+        assert str(ex_dir) in caplog.text
+    finally:
+        conn.close()
+
+
+def test_schema_v3_backfill_warns_when_multiple_videos_share_stem(
+    tmp_path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    base = tmp_path / "comfy4"
+    base.mkdir(parents=True)
+    monkeypatch.setattr("at_comfy.config.comfy_base_path", lambda: base.resolve())
+
+    db_file = base / "at.db"
+    conn = sqlite3.connect(str(db_file))
+    try:
+        conn.row_factory = sqlite3.Row
+        _schema_v1(conn)
+        _schema_v2(conn)
+        _set_user_version(conn, 2)
+        now = "2026-01-01T00:00:00Z"
+        conn.execute(
+            """
+            INSERT INTO library_files (
+                path, filename, stem, sha256, content_type, family, file_size_bytes, mtime, scanned_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (str(base / "d.sft"), "d.sft", "d", "z", "LORA", "lora", 1, 1.0, now),
+        )
+        conn.execute(
+            """
+            INSERT INTO library_assets (
+                primary_path, display_name, content_type, family, trigger_words, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (str(base / "d.sft"), "D", "LORA", "lora", "[]", now, now),
+        )
+        aid = int(conn.execute("SELECT asset_id FROM library_assets LIMIT 1").fetchone()[0])
+        ex_dir = base / "at_cache" / "examples" / str(aid)
+        ex_dir.mkdir(parents=True)
+        (ex_dir / "009.webm").write_bytes(b"w")
+        (ex_dir / "009.mp4").write_bytes(b"p")
+
+        conn.execute(
+            """
+            INSERT INTO example_media (
+                asset_id, media_type, origin_type, local_path, source_url,
+                width, height, caption, metadata_json, sort_order,
+                thumbnail_local_path, created_at
+            ) VALUES (?, 'video', 'civitai', '009.poster.jpg', 'https://c.test/x.mp4',
+                640, 480, NULL, NULL, 0, NULL, ?)
+            """,
+            (aid, now),
+        )
+        conn.commit()
+
+        with caplog.at_level(logging.WARNING):
+            migrate(conn)
+        row = conn.execute(
+            "SELECT playback_local_path FROM example_media WHERE asset_id = ?",
+            (aid,),
+        ).fetchone()
+        assert row["playback_local_path"] == "009.mp4"
+        assert "multiple local videos" in caplog.text
     finally:
         conn.close()

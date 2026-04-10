@@ -8,14 +8,21 @@ import ImageMetaLightbox from "@at-shared/ImageMetaLightbox.vue";
 import type { ExampleMediaItem } from "../types";
 
 const store = useAssetsStore();
-const { detail, detailLoading } = storeToRefs(store);
+const { detail, detailLoading, useRemoteImages } = storeToRefs(store);
 
 const coverPoster = computed(() =>
-  detail.value ? api.resolveCoverSrc(detail.value.cover_url_full || detail.value.cover_url) : null,
+  detail.value
+    ? api.resolveMediaSrc(
+        detail.value.cover_url_full || detail.value.cover_url,
+        useRemoteImages.value,
+      )
+    : null,
 );
 
 const coverPlayback = computed(() =>
-  detail.value ? api.resolveCoverSrc(detail.value.cover_playback_url) : null,
+  detail.value
+    ? api.resolveMediaSrc(detail.value.cover_playback_url, useRemoteImages.value)
+    : null,
 );
 
 const coverIsVideo = computed(
@@ -72,8 +79,9 @@ function closeImageLightbox(): void {
 
 function openExampleLightbox(ex: ExampleMediaItem): void {
   const mt = (ex.media_type || "image").toLowerCase();
-  const play = ex.playback_url ? api.resolveCoverSrc(ex.playback_url) : null;
-  const poster = api.resolveCoverSrc(ex.poster_url || ex.thumbnail_url);
+  const allow = useRemoteImages.value;
+  const play = ex.playback_url ? api.resolveMediaSrc(ex.playback_url, allow) : null;
+  const poster = api.resolveMediaSrc(ex.poster_url || ex.thumbnail_url, allow);
 
   if (mt === "video" && play) {
     lightboxMediaType.value = "video";
@@ -85,13 +93,13 @@ function openExampleLightbox(ex: ExampleMediaItem): void {
     lightboxMediaType.value = "image";
     lightboxPlaybackUrl.value = null;
     lightboxPosterUrl.value = null;
-    const u = poster || api.resolveCoverSrc(ex.url || ex.thumbnail_url);
+    const u = poster || api.resolveMediaSrc(ex.url || ex.thumbnail_url, allow);
     if (!u) return;
     lightboxImageUrl.value = u;
   } else {
     lightboxPlaybackUrl.value = null;
     lightboxPosterUrl.value = null;
-    const u = api.resolveCoverSrc(ex.url || ex.thumbnail_url);
+    const u = api.resolveMediaSrc(ex.url || ex.thumbnail_url, allow);
     if (!u) return;
     lightboxImageUrl.value = u;
   }
@@ -303,7 +311,7 @@ async function refreshFromCivitai(): Promise<void> {
                 <template v-if="(ex.media_type || '').toLowerCase() === 'video' && ex.playback_url">
                   <video
                     class="at-detail__ex-vid"
-                    :src="api.resolveCoverSrc(ex.playback_url) || ''"
+                    :src="api.resolveMediaSrc(ex.playback_url, useRemoteImages) || ''"
                     muted
                     loop
                     playsinline
@@ -311,7 +319,10 @@ async function refreshFromCivitai(): Promise<void> {
                   />
                   <img
                     v-if="ex.thumbnail_url || ex.poster_url"
-                    :src="api.resolveCoverSrc(ex.thumbnail_url || ex.poster_url || ex.url) || ''"
+                    :src="
+                      api.resolveMediaSrc(ex.thumbnail_url || ex.poster_url || ex.url, useRemoteImages) ||
+                      ''
+                    "
                     alt=""
                     class="at-detail__ex-img at-detail__ex-img--freeze"
                     loading="lazy"
@@ -319,14 +330,16 @@ async function refreshFromCivitai(): Promise<void> {
                 </template>
                 <img
                   v-else-if="(ex.media_type || '').toLowerCase() === 'video'"
-                  :src="api.resolveCoverSrc(ex.thumbnail_url || ex.poster_url || ex.url) || ''"
+                  :src="
+                    api.resolveMediaSrc(ex.thumbnail_url || ex.poster_url || ex.url, useRemoteImages) || ''
+                  "
                   alt=""
                   class="at-detail__ex-img"
                   loading="lazy"
                 />
                 <img
                   v-else-if="ex.thumbnail_url || ex.url"
-                  :src="api.resolveCoverSrc(ex.thumbnail_url || ex.url) || ''"
+                  :src="api.resolveMediaSrc(ex.thumbnail_url || ex.url, useRemoteImages) || ''"
                   alt=""
                   class="at-detail__ex-img"
                   loading="lazy"

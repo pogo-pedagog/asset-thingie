@@ -422,13 +422,11 @@ async def _fetch_cover(
             elif getattr(cfg, "generate_video_posters", True):
                 poster_jpeg_from_video_url(vu, dest_jpg, headers=hdr)
         else:
-            if dest_mp4.is_file():
-                try:
-                    dest_mp4.unlink()
-                except OSError:
-                    pass
             if getattr(cfg, "generate_video_posters", True):
-                poster_jpeg_from_video_url(vu, dest_jpg, headers=hdr)
+                if dest_mp4.is_file():
+                    poster_jpeg_from_video_file(dest_mp4, dest_jpg)
+                if not dest_jpg.is_file():
+                    poster_jpeg_from_video_url(vu, dest_jpg, headers=hdr)
         # Only stop here once we have a raster poster; MP4 alone still needs a JPG for grid/thumb.
         if dest_jpg.is_file():
             return

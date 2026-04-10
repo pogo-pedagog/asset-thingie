@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { resolveCoverSrc } from "../api";
+import { resolveMediaSrc } from "../api";
 import type { AssetItem } from "../types";
 import { useAssetsStore } from "../stores/assets";
 import { copyText } from "../composables/useClipboard";
@@ -9,9 +9,13 @@ const props = defineProps<{ item: AssetItem; compact?: boolean }>();
 
 const store = useAssetsStore();
 
-const coverSrc = computed(() => resolveCoverSrc(props.item.cover_url));
+const coverSrc = computed(() =>
+  resolveMediaSrc(props.item.cover_url, store.useRemoteImages),
+);
 
-const coverPlaybackSrc = computed(() => resolveCoverSrc(props.item.cover_playback_url));
+const coverPlaybackSrc = computed(() =>
+  resolveMediaSrc(props.item.cover_playback_url, store.useRemoteImages),
+);
 
 const coverIsVideo = computed(
   () => (props.item.cover_media_type || "").toLowerCase() === "video" && Boolean(coverPlaybackSrc.value),

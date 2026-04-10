@@ -235,14 +235,32 @@ def _backfill_example_media_video_paths(conn: sqlite3.Connection) -> None:
             continue
         aid = int(row["asset_id"])
         d: Path = ex_root / str(aid)
-        for ext in _VIDEO_FILE_SUFFIXES:
-            cand = f"{stem}{ext}"
-            if (d / cand).is_file():
-                conn.execute(
-                    "UPDATE example_media SET playback_local_path = ? WHERE example_media_id = ?",
-                    (cand, int(row["example_media_id"])),
-                )
-                break
+        matches = [f"{stem}{ext}" for ext in _VIDEO_FILE_SUFFIXES if (d / f"{stem}{ext}").is_file()]
+        ex_mid = int(row["example_media_id"])
+        if not matches:
+            logger.warning(
+                "at_comfy schema v3 backfill: example_media id=%s asset_id=%s poster_path=%r has no "
+                "matching video file under %s (playback_local_path left unset)",
+                ex_mid,
+                aid,
+                lp,
+                d,
+            )
+            continue
+        if len(matches) > 1:
+            logger.warning(
+                "at_comfy schema v3 backfill: example_media id=%s asset_id=%s stem=%r has multiple "
+                "local videos %s; using %r",
+                ex_mid,
+                aid,
+                stem,
+                matches,
+                matches[0],
+            )
+        conn.execute(
+            "UPDATE example_media SET playback_local_path = ? WHERE example_media_id = ?",
+            (matches[0], ex_mid),
+        )
 
 
 def _schema_v3(conn: sqlite3.Connection) -> None:

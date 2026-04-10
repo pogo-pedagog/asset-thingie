@@ -45,13 +45,18 @@ function tryLoadMore(): void {
   void browse.loadMore();
 }
 
-let scrollRaf = 0;
-function onScrollRoot(): void {
-  if (scrollRaf) return;
-  scrollRaf = requestAnimationFrame(() => {
-    scrollRaf = 0;
+/** One rAF per frame for all code paths (scroll, data) so we do not double `tryLoadMore` on mount. */
+let tryLoadMoreRaf = 0;
+function scheduleTryLoadMore(): void {
+  if (tryLoadMoreRaf) return;
+  tryLoadMoreRaf = requestAnimationFrame(() => {
+    tryLoadMoreRaf = 0;
     tryLoadMore();
   });
+}
+
+function onScrollRoot(): void {
+  scheduleTryLoadMore();
 }
 
 watch(
@@ -60,14 +65,25 @@ watch(
     if (prev) prev.removeEventListener("scroll", onScrollRoot);
     if (!root) return;
     root.addEventListener("scroll", onScrollRoot, { passive: true });
-    requestAnimationFrame(() => tryLoadMore());
+    // Listener is attached synchronously; defer check so layout/DOM after v-if mount is settled.
+    scheduleTryLoadMore();
   },
-  { flush: "post", immediate: true },
+  { flush: "post" },
 );
 
 watch([items, loading, fetching], () => {
-  requestAnimationFrame(() => tryLoadMore());
+  scheduleTryLoadMore();
 });
+
+/** After first bootstrap search, keep grid/query in sync when server `hide_nsfw` changes (e.g. settings save). */
+const browseNsfwPolicyReady = ref(false);
+watch(
+  () => browse.hideNsfwFromConfig,
+  () => {
+    if (!browseNsfwPolicyReady.value) return;
+    void browse.search(true);
+  },
+);
 
 onMounted(async () => {
   dl.startPolling();
@@ -78,7 +94,9 @@ onMounted(async () => {
   } catch {
     /* Keep default SFW (hideNsfwFromConfig === true) if config unreachable */
   }
-  void browse.search(true);
+  void browse.search(true).finally(() => {
+    browseNsfwPolicyReady.value = true;
+  });
 });
 
 onUnmounted(() => {

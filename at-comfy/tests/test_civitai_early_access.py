@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime, timedelta
+
+import pytest
 
 from at_comfy.civitai.client import (
     _collect_excluded_early_access_variants,
@@ -27,8 +30,11 @@ def test_parse_deadline_with_fractional_seconds() -> None:
     assert dt is not None
 
 
-def test_parse_deadline_invalid() -> None:
-    assert parse_civitai_early_access_deadline("not-a-date") is None
+def test_parse_deadline_invalid(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level(logging.WARNING):
+        assert parse_civitai_early_access_deadline("not-a-date") is None
+    assert "Unparseable Civitai earlyAccessDeadline" in caplog.text
+    assert "not-a-date" in caplog.text
     assert parse_civitai_early_access_deadline(None) is None
 
 
@@ -331,6 +337,39 @@ def test_raw_item_for_browse_detail_sets_is_early_access_and_sorts() -> None:
     assert vers[0]["isEarlyAccess"] is True
     assert vers[1]["isEarlyAccess"] is True
     assert vers[2]["isEarlyAccess"] is False
+
+
+def test_raw_item_for_browse_detail_stable_sort_same_published_at() -> None:
+    """Tie-break on version id so order does not depend on API list order."""
+    ts = "2026-01-01T00:00:00.000Z"
+    base = {
+        "id": 1,
+        "name": "M",
+        "type": "Checkpoint",
+        "modelVersions": [
+            {
+                "id": 5,
+                "publishedAt": ts,
+                "availability": "Public",
+                "files": [_dummy_file()],
+            },
+            {
+                "id": 100,
+                "publishedAt": ts,
+                "availability": "Public",
+                "files": [_dummy_file()],
+            },
+        ],
+    }
+    now = datetime.now(UTC)
+    lo_first = _raw_item_for_browse_detail(base, now=now)
+    hi_first = _raw_item_for_browse_detail(
+        {**base, "modelVersions": list(reversed(base["modelVersions"]))},
+        now=now,
+    )
+    assert lo_first is not None and hi_first is not None
+    assert [v["id"] for v in lo_first["modelVersions"]] == [100, 5]
+    assert [v["id"] for v in hi_first["modelVersions"]] == [100, 5]
 
 
 def test_filter_early_access_hide_off_returns_original() -> None:

@@ -256,10 +256,17 @@ async def test_fetch_cover_falls_back_to_image_when_video_poster_fails(
         ],
     )
 
+    def poster_from_file_fails(video: Path, dest_jpg: Path) -> bool:
+        return False
+
     def poster_fails(url: str, dest_jpg: Path, *, headers=None) -> bool:
         return False
 
     image_payload = b"\xff\xd8_fallback_from_image"
+
+    cov = tmp_comfy_base / "at_cache" / "covers"
+    cov.mkdir(parents=True, exist_ok=True)
+    (cov / "78.mp4").write_bytes(b"prior_cached_mp4")
 
     class FakeImageOnlyClient:
         def __init__(self, *args, **kwargs):
@@ -278,14 +285,14 @@ async def test_fetch_cover_falls_back_to_image_when_video_poster_fails(
 
             return R()
 
+    monkeypatch.setattr("at_comfy.enrichment.poster_jpeg_from_video_file", poster_from_file_fails)
     monkeypatch.setattr("at_comfy.enrichment.poster_jpeg_from_video_url", poster_fails)
     monkeypatch.setattr("at_comfy.enrichment.httpx.AsyncClient", FakeImageOnlyClient)
 
     await _fetch_cover(78, model, ATComfyConfig(generate_video_posters=True, download_example_videos=False))
 
-    cov = tmp_comfy_base / "at_cache" / "covers"
     assert (cov / "78.jpg").read_bytes() == image_payload
-    assert not (cov / "78.mp4").exists()
+    assert (cov / "78.mp4").read_bytes() == b"prior_cached_mp4"
 
 
 @pytest.mark.asyncio

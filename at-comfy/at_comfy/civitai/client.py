@@ -343,6 +343,12 @@ def parse_civitai_early_access_deadline(deadline: str | None) -> datetime | None
     try:
         dt = datetime.fromisoformat(s)
     except ValueError:
+        logger.warning(
+            "Unparseable Civitai earlyAccessDeadline %r (normalized %r); "
+            "treating as absent and falling back to availability",
+            deadline,
+            s,
+        )
         return None
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=UTC)
@@ -377,6 +383,18 @@ def _published_at_sort_key(version: dict) -> str:
     return p.strip() if isinstance(p, str) and p.strip() else ""
 
 
+def _version_id_sort_key(version: dict) -> int:
+    raw = version.get("id")
+    if isinstance(raw, int) and not isinstance(raw, bool):
+        return raw
+    return -1
+
+
+def _model_version_sort_key(version: dict) -> tuple[str, int]:
+    """Descending sort: newest ``publishedAt``, then highest ``id`` for ties (deterministic)."""
+    return (_published_at_sort_key(version), _version_id_sort_key(version))
+
+
 def _raw_item_for_browse_detail(item: dict, *, now: datetime) -> dict | None:
     """All file-bearing versions sorted by ``publishedAt`` desc, each with ``isEarlyAccess`` set."""
     vers: list[dict] = []
@@ -389,7 +407,7 @@ def _raw_item_for_browse_detail(item: dict, *, now: datetime) -> dict | None:
         vers.append({**v, "isEarlyAccess": ea})
     if not vers:
         return None
-    vers.sort(key=_published_at_sort_key, reverse=True)
+    vers.sort(key=_model_version_sort_key, reverse=True)
     return {**item, "modelVersions": vers}
 
 
@@ -445,7 +463,7 @@ def _filter_early_access_single_item(item: dict, *, hide: bool, now: datetime) -
         visible.append(v)
     if not visible:
         return None
-    visible.sort(key=_published_at_sort_key, reverse=True)
+    visible.sort(key=_model_version_sort_key, reverse=True)
     return {**item, "modelVersions": visible}
 
 
@@ -466,7 +484,7 @@ def _collect_excluded_early_access_variants(item: dict, now: datetime) -> list[d
             "name": name,
             "earlyAccessDeadline": dl if isinstance(dl, str) else None,
         }
-        rows.append((_published_at_sort_key(v), row))
+        rows.append((_model_version_sort_key(v), row))
     rows.sort(key=lambda t: t[0], reverse=True)
     return [t[1] for t in rows]
 

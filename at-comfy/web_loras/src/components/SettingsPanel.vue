@@ -90,6 +90,16 @@ function save(): void {
         1–20 columns when the toolbar is in grid mode. Very narrow sidebars still use one column.
       </p>
 
+      <label class="at-settings__label at-settings__label--row at-settings__label--mt">
+        <input v-model="store.useRemoteImages" type="checkbox" class="at-settings__checkbox" />
+        Use remote images
+      </label>
+      <p class="at-settings__hint">
+        When enabled, covers and example gallery may load HTTPS URLs from Civitai when an item is
+        not fully cached. When disabled, only images served from this Comfy instance
+        (<code>/at/cache/…</code>) are shown.
+      </p>
+
       <div class="at-settings__section">
         <h3 class="at-settings__subtitle">Library maintenance</h3>
         <p class="at-settings__hint">
@@ -215,6 +225,17 @@ function save(): void {
 }
 .at-settings__label--mt {
   margin-top: 0.75rem;
+}
+.at-settings__label--row {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+.at-settings__checkbox {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  accent-color: var(--p-primary-color, #6366f1);
 }
 .at-settings__slider-row {
   display: flex;
