@@ -60,6 +60,22 @@ describe("api", () => {
     expect(q.get("q")).toBe("x");
   });
 
+  it("buildBrowseSearchQuery encodes civarchive filter keys", () => {
+    const q = buildBrowseSearchQuery({
+      q: "a",
+      kind: "version",
+      page: 1,
+      civarchive_sort: "oldest",
+      civarchive_type: "Checkpoint",
+      civarchive_base_models: ["SD 1.5", "Pony"],
+      civarchive_tags: "foo",
+    });
+    expect(q.get("civarchive_sort")).toBe("oldest");
+    expect(q.get("civarchive_type")).toBe("Checkpoint");
+    expect(q.getAll("civarchive_base_model")).toEqual(["SD 1.5", "Pony"]);
+    expect(q.get("civarchive_tags")).toBe("foo");
+  });
+
   it("browseSearch uses /at when on Comfy (no limit in query)", async () => {
     vi.stubGlobal(
       "fetch",

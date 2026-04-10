@@ -31,4 +31,8 @@ export interface BrowseSourceUiState {
   /** CivArchive: search result kind filter (version | file | user). */
   civarchiveKind: string;
   civarchivePage: number;
+  civarchiveSort: string;
+  civarchiveType: string;
+  civarchiveBaseModels: string[];
+  civarchiveTags: string;
 }

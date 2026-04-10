@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
+import * as api from "../api";
 import { useBrowseStore, stabilizePaginationChain } from "./browse";
 import { browseSourceOptions } from "../sources/registry";
 
@@ -187,6 +188,62 @@ describe("browse store", () => {
     expect(s.searchParams().nsfw).toBe(true);
   });
 
+  it("searchParams for CivArchive sends civarchive_* fields and omits Civitai sort", () => {
+    const s = useBrowseStore();
+    s.setActiveSource("civarchive");
+    s.q = "lora";
+    s.civarchiveKind = "version";
+    s.civarchivePage = 2;
+    s.civarchiveSort = "downloads";
+    s.civarchiveType = "LORA";
+    s.civarchiveBaseModels = ["SD 1.5", "Pony"];
+    s.civarchiveTags = "anime";
+    const p = s.searchParams();
+    expect(p.kind).toBe("version");
+    expect(p.page).toBe(2);
+    expect(p.civarchive_sort).toBe("downloads");
+    expect(p.civarchive_type).toBe("LORA");
+    expect(p.civarchive_base_models).toEqual(["SD 1.5", "Pony"]);
+    expect(p.civarchive_tags).toBe("anime");
+    expect(p.sort).toBeUndefined();
+    expect(p.search_type).toBeUndefined();
+  });
+
+  it("searchParams for CivArchive omits optional keys when empty", () => {
+    const s = useBrowseStore();
+    s.setActiveSource("civarchive");
+    s.civarchiveSort = "newest";
+    s.civarchiveType = "";
+    s.civarchiveBaseModels = [];
+    s.civarchiveTags = "";
+    const p = s.searchParams();
+    expect(p.civarchive_sort).toBe("newest");
+    expect(p.civarchive_type).toBeUndefined();
+    expect(p.civarchive_base_models).toBeUndefined();
+    expect(p.civarchive_tags).toBeUndefined();
+    expect(p.civarchive_deleted_only).toBeUndefined();
+  });
+
+  it("searchParams for CivArchive sends deleted-only and civarchive_nsfw when NSFW allowed", () => {
+    const s = useBrowseStore();
+    s.setActiveSource("civarchive");
+    s.hideNsfwFromConfig = false;
+    s.civarchiveDeletedOnly = true;
+    s.civarchiveNsfw = "sfw";
+    const p = s.searchParams();
+    expect(p.civarchive_deleted_only).toBe(true);
+    expect(p.civarchive_nsfw).toBe("sfw");
+  });
+
+  it("searchParams for CivArchive omits civarchive_nsfw when NSFW hidden", () => {
+    const s = useBrowseStore();
+    s.setActiveSource("civarchive");
+    s.hideNsfwFromConfig = true;
+    s.civarchiveNsfw = "nsfw";
+    const p = s.searchParams();
+    expect(p.civarchive_nsfw).toBeUndefined();
+  });
+
   it("toggleBatchId adds and removes", () => {
     const s = useBrowseStore();
     s.toggleBatchId(5);
@@ -201,6 +258,49 @@ describe("browse store", () => {
     s.setBatchMode(false);
     expect(s.batchMode).toBe(false);
     expect(s.batchIds.size).toBe(0);
+  });
+
+  it("openResult on CivArchive user hit scopes search by username", async () => {
+    const s = useBrowseStore();
+    s.setActiveSource("civarchive");
+    const searchSpy = vi.spyOn(api, "browseSearch").mockResolvedValue({
+      items: [],
+      next_page: null,
+      prev_page: null,
+    });
+    await s.openResult({
+      id: "user:tester",
+      name: "Tester",
+      type: "User",
+      civarchiveHitKind: "user",
+      creator_username: "tester",
+    });
+    expect(s.q).toBe("tester");
+    expect(s.civarchiveKind).toBe("version");
+    expect(searchSpy).toHaveBeenCalled();
+    const params = searchSpy.mock.calls[0]![1]!;
+    expect(params.kind).toBe("version");
+    expect(params.q).toBe("tester");
+    searchSpy.mockRestore();
+  });
+
+  it("openResult opens detail for non-user CivArchive rows", async () => {
+    const s = useBrowseStore();
+    s.setActiveSource("civarchive");
+    const detailSpy = vi.spyOn(api, "browseDetail").mockResolvedValue({
+      id: 1,
+      name: "M",
+      type: "LORA",
+      modelVersions: [],
+    });
+    await s.openResult({
+      id: "sha256:" + "a".repeat(64),
+      name: "File",
+      type: "LORA",
+      civarchiveHitKind: "file",
+    });
+    expect(detailSpy).toHaveBeenCalledWith("civarchive", "sha256:" + "a".repeat(64), expect.any(Boolean));
+    detailSpy.mockRestore();
   });
 
   it("concurrent search: first result is discarded when second search starts", async () => {

@@ -16,7 +16,7 @@ def test_migrate_creates_core_tables(tmp_path) -> None:
     conn = sqlite3.connect(str(db_file))
     try:
         ver = conn.execute("PRAGMA user_version").fetchone()[0]
-        assert ver == 3
+        assert ver == 5
         names = {
             r[0]
             for r in conn.execute(
@@ -28,8 +28,25 @@ def test_migrate_creates_core_tables(tmp_path) -> None:
             "library_assets",
             "download_tasks",
             "source_metadata",
+            "civarchive_base_models",
         ):
             assert need in names
+    finally:
+        conn.close()
+
+
+def test_schema_v4_adds_raw_snapshot_json_when_missing(tmp_path) -> None:
+    """Older DBs can lack ``raw_snapshot_json`` while still at a high ``user_version``."""
+    db_file = tmp_path / "legacy.db"
+    conn = sqlite3.connect(str(db_file))
+    try:
+        conn.execute("CREATE TABLE source_metadata (asset_id INTEGER PRIMARY KEY NOT NULL)")
+        _set_user_version(conn, 3)
+        conn.commit()
+        migrate(conn)
+        cols = {str(r[1]) for r in conn.execute("PRAGMA table_info(source_metadata)").fetchall()}
+        assert "raw_snapshot_json" in cols
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == 5
     finally:
         conn.close()
 

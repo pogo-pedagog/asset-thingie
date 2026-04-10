@@ -75,6 +75,14 @@ type BrowseSlice = {
   period: string;
   civarchiveKind: string;
   civarchivePage: number;
+  /** CivArchive API ``sort`` (newest | oldest | downloads). */
+  civarchiveSort: string;
+  civarchiveType: string;
+  civarchiveBaseModels: string[];
+  civarchiveTags: string;
+  civarchiveDeletedOnly: boolean;
+  /** CivArchive ``civarchive_nsfw`` when NSFW is allowed in browse config. */
+  civarchiveNsfw: "all" | "sfw" | "nsfw";
   items: CivitaiBrowseItem[];
   buffer: CivitaiBrowseItem[];
   nextPage: string | null;
@@ -94,6 +102,12 @@ function emptySlice(): BrowseSlice {
     period: "All Time",
     civarchiveKind: "version",
     civarchivePage: 1,
+    civarchiveSort: "newest",
+    civarchiveType: "",
+    civarchiveBaseModels: [],
+    civarchiveTags: "",
+    civarchiveDeletedOnly: false,
+    civarchiveNsfw: "all",
     items: [],
     buffer: [],
     nextPage: null,
@@ -161,6 +175,42 @@ export const useBrowseStore = defineStore("at-browse", () => {
     get: () => sl().civarchivePage,
     set: (v: number) => {
       sl().civarchivePage = v;
+    },
+  });
+  const civarchiveSort = computed({
+    get: () => sl().civarchiveSort,
+    set: (v: string) => {
+      sl().civarchiveSort = v;
+    },
+  });
+  const civarchiveType = computed({
+    get: () => sl().civarchiveType,
+    set: (v: string) => {
+      sl().civarchiveType = v;
+    },
+  });
+  const civarchiveBaseModels = computed({
+    get: () => sl().civarchiveBaseModels,
+    set: (v: string[]) => {
+      sl().civarchiveBaseModels = v;
+    },
+  });
+  const civarchiveTags = computed({
+    get: () => sl().civarchiveTags,
+    set: (v: string) => {
+      sl().civarchiveTags = v;
+    },
+  });
+  const civarchiveDeletedOnly = computed({
+    get: () => sl().civarchiveDeletedOnly,
+    set: (v: boolean) => {
+      sl().civarchiveDeletedOnly = v;
+    },
+  });
+  const civarchiveNsfw = computed({
+    get: () => sl().civarchiveNsfw,
+    set: (v: "all" | "sfw" | "nsfw") => {
+      sl().civarchiveNsfw = v;
     },
   });
 
@@ -236,7 +286,26 @@ export const useBrowseStore = defineStore("at-browse", () => {
 
   function searchParams(): api.BrowseSearchParams {
     const s = sl();
-    const p: api.BrowseSearchParams = {
+    if (activeSource.value === "civarchive") {
+      const sort = s.civarchiveSort.trim() || "newest";
+      const p: api.BrowseSearchParams = {
+        q: s.q,
+        nsfw: !hideNsfwFromConfig.value,
+        kind: s.civarchiveKind,
+        page: s.civarchivePage,
+        civarchive_sort: sort,
+      };
+      const ct = s.civarchiveType.trim();
+      if (ct) p.civarchive_type = ct;
+      const bms = s.civarchiveBaseModels.map((x) => x.trim()).filter(Boolean);
+      if (bms.length) p.civarchive_base_models = bms;
+      const tg = s.civarchiveTags.trim();
+      if (tg) p.civarchive_tags = tg;
+      if (s.civarchiveDeletedOnly) p.civarchive_deleted_only = true;
+      if (!hideNsfwFromConfig.value) p.civarchive_nsfw = s.civarchiveNsfw;
+      return p;
+    }
+    return {
       q: s.q,
       search_type: s.searchType,
       content_types: [...s.contentTypes],
@@ -245,11 +314,6 @@ export const useBrowseStore = defineStore("at-browse", () => {
       period: s.period,
       nsfw: !hideNsfwFromConfig.value,
     };
-    if (activeSource.value === "civarchive") {
-      p.kind = s.civarchiveKind;
-      p.page = s.civarchivePage;
-    }
-    return p;
   }
 
   function _applyFetchedPage(
@@ -384,6 +448,26 @@ export const useBrowseStore = defineStore("at-browse", () => {
     }
   }
 
+  /** Routes grid open: CivArchive user hits re-run search instead of opening detail. */
+  async function openResult(item: CivitaiBrowseItem): Promise<void> {
+    if (
+      activeSource.value === "civarchive" &&
+      (item.civarchiveHitKind === "user" || String(item.id).startsWith("user:"))
+    ) {
+      const fromRef = String(item.id).replace(/^user:/i, "").trim();
+      const username =
+        (item.creator_username ?? "").trim() ||
+        (item.creator && typeof item.creator === "object" ? String(item.creator.username ?? "").trim() : "") ||
+        fromRef;
+      sl().q = username;
+      sl().civarchiveKind = "version";
+      closeDetail();
+      await search(true);
+      return;
+    }
+    await openModel(item.id);
+  }
+
   function closeDetail(): void {
     sl().selected = null;
   }
@@ -418,6 +502,12 @@ export const useBrowseStore = defineStore("at-browse", () => {
     period,
     civarchiveKind,
     civarchivePage,
+    civarchiveSort,
+    civarchiveType,
+    civarchiveBaseModels,
+    civarchiveTags,
+    civarchiveDeletedOnly,
+    civarchiveNsfw,
     hideNsfwFromConfig,
     hideEarlyAccessFromConfig,
     loading,
@@ -439,6 +529,7 @@ export const useBrowseStore = defineStore("at-browse", () => {
     loadMore,
     drainBuffer,
     openModel,
+    openResult,
     closeDetail,
     toggleBatchId,
     clearBatch,

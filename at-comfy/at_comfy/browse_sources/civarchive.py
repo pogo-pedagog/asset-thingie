@@ -6,11 +6,16 @@ import re
 from typing import Any
 
 from at_comfy.browse_sources.types import BrowsePageResult
+from at_comfy.civarchive_catalog import civarchive_base_models_upsert_batch
 from at_comfy.civarchive_client import CivArchiveClient
 from at_comfy.config import ATComfyConfig
 
+_SORT_RE = re.compile(r"^[a-z0-9_]{1,32}$")
+
 _ITEM_REF_RE = re.compile(r"^model:(\d+):version:(\d+)$", re.I)
 _SHA_PREFIX_RE = re.compile(r"^sha256:([0-9a-f]{64})$", re.I)
+_USER_REF_RE = re.compile(r"^user:(.+)$", re.I)
+_HIT_SHA_URL_RE = re.compile(r"/sha256/([0-9a-f]{64})", re.I)
 
 
 def _parse_model_version_from_hit(hit: dict[str, Any]) -> tuple[int, int] | None:
@@ -26,13 +31,46 @@ def _parse_model_version_from_hit(hit: dict[str, Any]) -> tuple[int, int] | None
     return None
 
 
-def _normalize_list_item(hit: dict[str, Any]) -> dict[str, Any]:
+def _civarchive_hit_kind(hit: dict[str, Any]) -> str:
+    k = str(hit.get("kind") or "version").strip().lower()
+    if k in ("version", "file", "user"):
+        return k
+    return "version"
+
+
+def _list_item_ref_for_hit(hit: dict[str, Any], *, hit_kind: str) -> str:
+    """Opaque grid id / detail ref for CivArchive search rows."""
+    if hit_kind == "user":
+        un = str(hit.get("username") or "").strip()
+        if not un:
+            un = str(hit.get("name") or "").strip()
+        if not un:
+            rid = str(hit.get("id") or "")
+            if rid.startswith("u") and len(rid) > 1:
+                un = rid[1:]
+        return f"user:{un}" if un else str(hit.get("id") or "")
+
+    url = str(hit.get("url") or "")
+    msha = _HIT_SHA_URL_RE.search(url)
+    if msha:
+        return f"sha256:{msha.group(1).lower()}"
+
     ids = _parse_model_version_from_hit(hit)
-    if ids is None:
-        item_ref = str(hit.get("id") or "")
-    else:
+    if ids is not None:
         mid, vid = ids
-        item_ref = f"model:{mid}:version:{vid}"
+        return f"model:{mid}:version:{vid}"
+
+    if hit_kind == "file":
+        sha = str(hit.get("sha256") or "").strip().lower()
+        if len(sha) == 64 and all(c in "0123456789abcdef" for c in sha):
+            return f"sha256:{sha}"
+
+    return str(hit.get("id") or "")
+
+
+def _normalize_list_item(hit: dict[str, Any]) -> dict[str, Any]:
+    hit_kind = _civarchive_hit_kind(hit)
+    item_ref = _list_item_ref_for_hit(hit, hit_kind=hit_kind)
     creator = str(hit.get("username") or "")
     name = str(hit.get("name") or "")
     dl = hit.get("download_count")
@@ -40,6 +78,7 @@ def _normalize_list_item(hit: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": item_ref,
         "source": "civarchive",
+        "civarchiveHitKind": hit_kind,
         "name": name,
         "type": str(hit.get("type") or "Model"),
         "nsfw": bool(hit.get("is_nsfw")),
@@ -158,6 +197,25 @@ def _mid_vid_from_sha_payload(data: dict[str, Any]) -> tuple[int, int]:
     raise ValueError("sha256 response missing version id")
 
 
+def _sanitize_civarchive_sort(sort_raw: str) -> str:
+    s = str(sort_raw or "").strip().lower() or "newest"
+    return s if _SORT_RE.fullmatch(s) else "newest"
+
+
+def _civarchive_is_nsfw_param(cfg: ATComfyConfig, query: dict[str, Any]) -> bool | None:
+    if cfg.hide_nsfw:
+        return False
+    mode = str(query.get("civarchive_nsfw") or "").strip().lower()
+    if mode == "sfw":
+        return False
+    if mode == "nsfw":
+        return True
+    if mode == "all":
+        return None
+    nsfw_allowed = bool(query.get("nsfw"))
+    return None if nsfw_allowed else False
+
+
 class CivArchiveBrowseSource:
     """CivArchive list/search/detail."""
 
@@ -178,14 +236,48 @@ class CivArchiveBrowseSource:
             page = max(1, int(page_raw))
         except ValueError:
             page = 1
+        sort = _sanitize_civarchive_sort(str(query.get("civarchive_sort") or "newest"))
+        ca_type = str(query.get("civarchive_type") or "").strip() or None
+        raw_bases = query.get("civarchive_base_models")
+        ca_base_list: list[str] = (
+            [str(x).strip() for x in raw_bases if str(x).strip()] if isinstance(raw_bases, list) else []
+        )
+        # Upstream accepts comma-separated ``base_model`` (OR); duplicate keys use first only.
+        ca_base: str | None = None
+        if ca_base_list:
+            ca_base = ",".join(sorted({*ca_base_list}))
+        ca_tags = str(query.get("civarchive_tags") or "").strip() or None
+        is_nsfw = _civarchive_is_nsfw_param(self._cfg, query)
+        deleted_only = bool(query.get("civarchive_deleted_only"))
+        is_deleted: bool | None = True if deleted_only else None
+
         client = self._client()
         try:
-            data = await client.search(q=q, kind=kind, page=page)
+            data = await client.search(
+                q=q,
+                kind=kind,
+                page=page,
+                sort=sort,
+                model_type=ca_type,
+                base_model=ca_base,
+                tags=ca_tags,
+                is_nsfw=is_nsfw,
+                is_deleted=is_deleted,
+            )
         finally:
             await client.aclose()
         results = data.get("results")
         if not isinstance(results, list):
             results = []
+        bases: set[str] = set()
+        for h in results:
+            if not isinstance(h, dict):
+                continue
+            bm = h.get("base_model")
+            if bm is not None and str(bm).strip():
+                bases.add(str(bm).strip())
+        if bases:
+            civarchive_base_models_upsert_batch(bases)
         items = [_normalize_list_item(h) for h in results if isinstance(h, dict)]
         total_hits = data.get("totalHits")
         prev_page: str | None = str(page - 1) if page > 1 else None
@@ -214,6 +306,9 @@ class CivArchiveBrowseSource:
                 mid, vid = _mid_vid_from_sha_payload(data)
                 raw = await client.get_model(mid, vid)
                 return _normalize_detail_payload(raw)
+
+            if _USER_REF_RE.match(ref):
+                raise ValueError("user rows open via search; use username-scoped browse")
 
             m2 = _ITEM_REF_RE.match(ref)
             if not m2:

@@ -31,6 +31,15 @@ export interface CivitaiImageSummary {
   id?: number | null;
 }
 
+export interface CivArchiveMirrorRow {
+  source?: string;
+  url?: string;
+  filename?: string;
+  is_gated?: boolean;
+  is_paid?: boolean;
+  deletedAt?: unknown;
+}
+
 export interface CivitaiFileSummary {
   id: number;
   name: string;
@@ -42,6 +51,8 @@ export interface CivitaiFileSummary {
   primary?: boolean;
   sizeKB?: number | null;
   sha256?: string | null;
+  /** CivArchive file rows include mirror candidates (LoRA Manager–style). */
+  mirrors?: CivArchiveMirrorRow[];
 }
 
 export interface CivitaiVersionSummary {
@@ -57,14 +68,7 @@ export interface CivitaiVersionSummary {
 
 /** Optional CivArchive extras on normalized browse/detail payloads. */
 export interface BrowseSourceSections {
-  mirrors?: Array<{
-    source?: string;
-    url?: string;
-    filename?: string;
-    is_gated?: boolean;
-    is_paid?: boolean;
-    deletedAt?: unknown;
-  }>;
+  mirrors?: CivArchiveMirrorRow[];
   sha256?: string | null;
   platform?: string;
 }
@@ -75,6 +79,8 @@ export interface CivitaiBrowseItem {
   id: number | string;
   /** Set when this row comes from CivArchive search normalization. */
   source?: string;
+  /** CivArchive search hit kind (version | file | user). */
+  civarchiveHitKind?: "version" | "file" | "user";
   /** Top-level preview URL from CivArchive search hits. */
   image_url?: string | null;
   name: string;

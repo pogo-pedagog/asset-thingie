@@ -96,6 +96,21 @@ async function triggerEnrich(): Promise<void> {
   }
 }
 
+async function resetCivarchiveBaseModels(): Promise<void> {
+  if (
+    !confirm(
+      "Clear the CivArchive base model list learned from search? The dropdown will fall back to defaults until new searches add names again.",
+    )
+  ) {
+    return;
+  }
+  try {
+    await api.postCivarchiveBaseModelsReset();
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Reset failed";
+  }
+}
+
 async function tickStatus(): Promise<void> {
   try {
     scanStatus.value = await api.fetchScanStatus();
@@ -194,6 +209,14 @@ onUnmounted(() => {
         <input v-model="config.hide_nsfw" type="checkbox" />
         Hide NSFW from Civitai (browse search, detail, and related API calls)
       </label>
+
+      <p class="at-hint">
+        CivArchive browse accumulates <strong>base model</strong> strings from search results into SQLite. Use reset
+        if the dropdown grows stale.
+      </p>
+      <button type="button" class="at-btn at-btn--ghost" @click="resetCivarchiveBaseModels">
+        Reset CivArchive base model list
+      </button>
 
       <label class="at-label at-label--row">
         <input v-model="config.download_example_videos" type="checkbox" />

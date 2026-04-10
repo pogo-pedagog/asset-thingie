@@ -94,6 +94,18 @@ async def prepare_civarchive_download(body: dict[str, Any], cfg: ATComfyConfig) 
     if not candidate_urls:
         raise ValueError("no download URLs")
 
+    pref_raw = str(body.get("civarchive_preferred_download_url") or "").strip()
+    if pref_raw:
+        pref_expanded = _expand_mirror_url(pref_raw)
+        if pref_expanded:
+            idx = next(
+                (i for i, u in enumerate(candidate_urls) if _expand_mirror_url(u) == pref_expanded),
+                None,
+            )
+            if idx is not None and idx > 0:
+                picked = candidate_urls[idx]
+                candidate_urls = [picked, *[u for i, u in enumerate(candidate_urls) if i != idx]]
+
     key = (cfg.civitai_api_key or "").strip()
     headers_by_url: dict[str, dict[str, str]] = {}
     for u in candidate_urls:

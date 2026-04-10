@@ -198,6 +198,16 @@ async def test_browse_model_enriches_versions_for_image_meta(tmp_comfy_base, mon
 
 
 @pytest.mark.asyncio
+async def test_browse_model_non_numeric_id_returns_400(tmp_comfy_base) -> None:
+    app = create_test_app()
+    async with TestClient(TestServer(app)) as client:
+        r = await client.get("/at/browse/model/not-a-model-id")
+        assert r.status == 400
+        data = await r.json()
+        assert data.get("error") == "bad id"
+
+
+@pytest.mark.asyncio
 async def test_put_config_persists(tmp_comfy_base) -> None:
     app = create_test_app()
     async with TestClient(TestServer(app)) as client:

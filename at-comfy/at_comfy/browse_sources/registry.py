@@ -31,6 +31,13 @@ def browse_query_dict_from_request(request: Any) -> dict[str, Any]:
     q = request.query
     getall = getattr(q, "getall", None)
 
+    def truthy_keys(*keys: str) -> bool:
+        for k in keys:
+            v = str(q.get(k) or "").strip().lower()
+            if v in ("1", "true", "yes", "on"):
+                return True
+        return False
+
     def all_vals(key: str) -> list[str]:
         if callable(getall):
             try:
@@ -52,4 +59,10 @@ def browse_query_dict_from_request(request: Any) -> dict[str, Any]:
         "nsfw": (q.get("nsfw") or "").lower() in ("1", "true", "yes"),
         "kind": (q.get("kind") or "").strip(),
         "page": (q.get("page") or "").strip(),
+        "civarchive_sort": (q.get("civarchive_sort") or "").strip(),
+        "civarchive_type": (q.get("civarchive_type") or "").strip(),
+        "civarchive_base_models": all_vals("civarchive_base_model"),
+        "civarchive_tags": (q.get("civarchive_tags") or "").strip(),
+        "civarchive_deleted_only": truthy_keys("civarchive_deleted_only", "civarchive_is_deleted"),
+        "civarchive_nsfw": (q.get("civarchive_nsfw") or "").strip().lower(),
     }

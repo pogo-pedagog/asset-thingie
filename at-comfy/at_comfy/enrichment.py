@@ -419,10 +419,11 @@ async def _fetch_cover(
                         dest_mp4.write_bytes(r.content)
             except Exception as e:
                 logger.debug("cover video download failed: %s", e)
-            if getattr(cfg, "generate_video_posters", True) and dest_mp4.is_file():
-                poster_jpeg_from_video_file(dest_mp4, dest_jpg)
-            elif getattr(cfg, "generate_video_posters", True):
-                poster_jpeg_from_video_url(vu, dest_jpg, headers=hdr)
+            if getattr(cfg, "generate_video_posters", True):
+                if dest_mp4.is_file():
+                    poster_jpeg_from_video_file(dest_mp4, dest_jpg)
+                if not dest_jpg.is_file():
+                    poster_jpeg_from_video_url(vu, dest_jpg, headers=hdr)
         else:
             if getattr(cfg, "generate_video_posters", True):
                 if dest_mp4.is_file():

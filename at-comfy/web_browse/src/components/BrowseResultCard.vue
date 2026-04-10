@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { CivitaiBrowseItem } from "../types";
 import { computed } from "vue";
-import { coverMediaFromBrowseItem, creatorNameFromItem, thumbUrl } from "../utils/civitaiDisplay";
+import { coverMediaFromBrowseItem, creatorNameFromItem, mediaDisplayUrl } from "../utils/civitaiDisplay";
 
 const props = defineProps<{
   item: CivitaiBrowseItem;
@@ -42,6 +42,9 @@ function onCheckboxClick(e: MouseEvent): void {
 
 const coverMedia = computed(() => coverMediaFromBrowseItem(props.item));
 const coverIsVideo = computed(() => (coverMedia.value?.type || "image").toLowerCase() === "video");
+const coverUrl = computed(() =>
+  coverMedia.value?.url ? mediaDisplayUrl(coverMedia.value.url, props.item.source) : "",
+);
 
 function playCoverPreview(e: MouseEvent): void {
   const el = (e.currentTarget as HTMLElement | null)?.querySelector("video");
@@ -69,11 +72,11 @@ function stopCoverPreview(e: MouseEvent): void {
       <input type="checkbox" :checked="batchSelected" tabindex="-1" readonly />
     </div>
     <div class="result-card__thumb">
-      <template v-if="coverMedia?.url">
+      <template v-if="coverUrl">
         <video
           v-if="coverIsVideo"
           class="result-card__thumb-video"
-          :src="coverMedia.url"
+          :src="coverUrl"
           muted
           loop
           playsinline
@@ -81,7 +84,7 @@ function stopCoverPreview(e: MouseEvent): void {
         />
         <img
           v-else
-          :src="thumbUrl(coverMedia.url)"
+          :src="coverUrl"
           :alt="item.name"
           loading="lazy"
         />

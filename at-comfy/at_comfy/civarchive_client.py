@@ -39,14 +39,41 @@ class CivArchiveClient:
             await self._client.aclose()
         self._client = None
 
-    async def search(self, *, q: str, kind: str | None = None, page: int | None = 1) -> dict[str, Any]:
-        """GET /search — returns ``results``, ``hits``, ``totalHits``."""
+    async def search(
+        self,
+        *,
+        q: str,
+        kind: str | None = None,
+        page: int | None = 1,
+        sort: str | None = None,
+        model_type: str | None = None,
+        base_model: str | None = None,
+        tags: str | None = None,
+        is_nsfw: bool | None = None,
+        is_deleted: bool | None = None,
+    ) -> dict[str, Any]:
+        """GET /search — returns ``results``, ``hits``, ``totalHits``.
+
+        ``model_type`` is sent as the API's ``type`` query key (CivArchive naming).
+        """
         hc = await self._hc()
         params: dict[str, str] = {"q": q or ""}
         if kind:
             params["kind"] = kind.strip()
         if page is not None:
             params["page"] = str(max(1, int(page)))
+        if sort and str(sort).strip():
+            params["sort"] = str(sort).strip()
+        if model_type and str(model_type).strip():
+            params["type"] = str(model_type).strip()
+        if base_model and str(base_model).strip():
+            params["base_model"] = str(base_model).strip()
+        if tags and str(tags).strip():
+            params["tags"] = str(tags).strip()
+        if is_nsfw is not None:
+            params["is_nsfw"] = "true" if is_nsfw else "false"
+        if is_deleted is not None:
+            params["is_deleted"] = "true" if is_deleted else "false"
         r = await hc.get(f"{self._base}/search", params=params)
         r.raise_for_status()
         return r.json()

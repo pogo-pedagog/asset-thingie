@@ -66,6 +66,16 @@ export interface BrowseSearchParams {
   kind?: string;
   /** CivArchive page index (1-based). */
   page?: string | number;
+  /** CivArchive-only: ``sort`` query param for ``/api/search`` (newest | oldest | downloads). */
+  civarchive_sort?: string;
+  civarchive_type?: string;
+  /** CivArchive ``base_model`` filter; multiple values are joined upstream with commas (OR). */
+  civarchive_base_models?: string[];
+  civarchive_tags?: string;
+  /** When true, upstream ``is_deleted=true`` (tombstoned rows only). */
+  civarchive_deleted_only?: boolean;
+  /** CivArchive NSFW filter when browse config allows NSFW: ``all`` \| ``sfw`` \| ``nsfw``. */
+  civarchive_nsfw?: "all" | "sfw" | "nsfw";
 }
 
 export function buildBrowseSearchQuery(p: BrowseSearchParams): URLSearchParams {
@@ -83,6 +93,15 @@ export function buildBrowseSearchQuery(p: BrowseSearchParams): URLSearchParams {
   if (p.nsfw) sp.set("nsfw", "true");
   if (p.kind?.trim()) sp.set("kind", p.kind.trim());
   if (p.page != null && String(p.page).trim() !== "") sp.set("page", String(p.page));
+  if (p.civarchive_sort?.trim()) sp.set("civarchive_sort", p.civarchive_sort.trim());
+  if (p.civarchive_type?.trim()) sp.set("civarchive_type", p.civarchive_type.trim());
+  for (const bm of p.civarchive_base_models ?? []) {
+    const s = String(bm).trim();
+    if (s) sp.append("civarchive_base_model", s);
+  }
+  if (p.civarchive_tags?.trim()) sp.set("civarchive_tags", p.civarchive_tags.trim());
+  if (p.civarchive_deleted_only) sp.set("civarchive_deleted_only", "1");
+  if (p.civarchive_nsfw) sp.set("civarchive_nsfw", p.civarchive_nsfw);
   return sp;
 }
 
@@ -106,6 +125,14 @@ export async function browsePage(
   const sp = buildBrowseSearchQuery(params);
   sp.set("url", urlParam);
   return fetchJson(`${getApiPrefix()}/browse/${source}/page?${sp.toString()}`);
+}
+
+export async function fetchCivarchiveBaseModels(): Promise<{ base_models: string[] }> {
+  return fetchJson(`${getApiPrefix()}/browse/civarchive/base-models`);
+}
+
+export async function postCivarchiveBaseModelsReset(): Promise<{ ok: boolean; base_models: string[] }> {
+  return fetchJson(`${getApiPrefix()}/browse/civarchive/base-models/reset`, { method: "POST" });
 }
 
 export async function browseDetail(

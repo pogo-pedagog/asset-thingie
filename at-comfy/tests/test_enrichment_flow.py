@@ -364,6 +364,74 @@ async def test_fetch_cover_image_fallback_keeps_downloaded_mp4(
     assert (cov / "79.mp4").read_bytes() == b"local_mp4_bytes"
 
 
+@pytest.mark.asyncio
+async def test_fetch_cover_downloaded_mp4_falls_back_to_url_poster_when_file_extract_fails(
+    tmp_comfy_base: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """If local ffmpeg frame grab fails, still try URL-based poster (video-only cover)."""
+    model = CivitaiModel(
+        id=324,
+        name="m",
+        type="LORA",
+        creator_username="c",
+        tags=[],
+        model_versions=[
+            CivitaiModelVersion(
+                id=14,
+                name="v1",
+                base_model="SDXL 1.0",
+                trained_words=[],
+                images=[
+                    {"type": "video", "url": "https://example.test/cover.mp4", "width": 1024, "height": 1024},
+                ],
+                files=[],
+            ),
+        ],
+    )
+
+    def poster_from_file_fails(video: Path, dest_jpg: Path) -> bool:
+        return False
+
+    def poster_from_url_ok(url: str, dest_jpg: Path, *, headers=None) -> bool:
+        assert url.endswith(".mp4")
+        dest_jpg.parent.mkdir(parents=True, exist_ok=True)
+        dest_jpg.write_bytes(b"\xff\xd8_from_url_poster")
+        return True
+
+    class FakeMp4Client:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def get(self, url, headers=None):
+            u = str(url)
+
+            class R:
+                is_success = True
+                content = b"downloaded_mp4" if u.endswith(".mp4") else b""
+
+            return R()
+
+    monkeypatch.setattr("at_comfy.enrichment.poster_jpeg_from_video_file", poster_from_file_fails)
+    monkeypatch.setattr("at_comfy.enrichment.poster_jpeg_from_video_url", poster_from_url_ok)
+    monkeypatch.setattr("at_comfy.enrichment.httpx.AsyncClient", FakeMp4Client)
+
+    await _fetch_cover(
+        80,
+        model,
+        ATComfyConfig(generate_video_posters=True, download_example_videos=True),
+    )
+
+    cov = tmp_comfy_base / "at_cache" / "covers"
+    assert (cov / "80.jpg").read_bytes() == b"\xff\xd8_from_url_poster"
+    assert (cov / "80.mp4").read_bytes() == b"downloaded_mp4"
+
+
 def test_example_media_upsert_dedupes_width_query_variants(tmp_comfy_base: Path) -> None:
     conn = get_conn()
     p = tmp_comfy_base / "loras" / "ex.safetensors"

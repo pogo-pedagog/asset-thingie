@@ -15,7 +15,7 @@ const { items, batchMode, batchIds } = storeToRefs(browse);
       :item="it"
       :batch-mode="batchMode"
       :batch-selected="batchIds.has(String(it.id))"
-      @open="browse.openModel(it.id)"
+      @open="browse.openResult(it)"
       @toggle-batch="browse.toggleBatchId(String(it.id))"
     />
   </div>
