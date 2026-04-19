@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
+
 from at_comfy.config import ATComfyConfig, load_config
 from at_comfy.download_cleanup import remove_partial_artifacts
 from at_comfy.download_sources.registry import prepare_download
@@ -43,6 +43,8 @@ class DownloadManager:
         self._tasks: dict[str, DownloadTask] = {}
         self._sched = asyncio.Condition()
         self._workers: list[asyncio.Task[None]] = []
+        # Caps concurrent process_download runs; worker tasks may outnumber this after lowering the limit.
+        self._max_parallel: int = 1
         self._in_progress_ids: set[str] = set()
         self._queue_seq = 0
         self._restore_done = False
@@ -123,6 +125,8 @@ class DownloadManager:
         ]
 
     def _pick_next_under_lock(self) -> DownloadTask | None:
+        if len(self._in_progress_ids) >= self._max_parallel:
+            return None
         pending = self._eligible_queued()
         if not pending:
             return None
@@ -131,13 +135,20 @@ class DownloadManager:
     def start(self, cfg: ATComfyConfig | None = None) -> None:
         c = cfg if cfg is not None else load_config()
         n = max(1, int(c.max_parallel_downloads))
-        alive = [w for w in self._workers if not w.done()]
-        if len(alive) >= n:
+        self._max_parallel = n
+        # Prune finished workers in-place so the list object is stable across idempotent start() calls.
+        i = 0
+        while i < len(self._workers):
+            if self._workers[i].done():
+                self._workers.pop(i)
+            else:
+                i += 1
+        alive_count = len(self._workers)
+        if alive_count >= n:
             return
-        for w in self._workers:
-            if not w.done():
-                w.cancel()
-        self._workers = [asyncio.create_task(self._worker_loop()) for _ in range(n)]
+        need = n - alive_count
+        for _ in range(need):
+            self._workers.append(asyncio.create_task(self._worker_loop()))
 
     async def _worker_loop(self) -> None:
         from at_comfy.download_worker import process_download
@@ -354,6 +365,7 @@ class DownloadManager:
             elif t.state == DownloadState.QUEUED and normalize_download_task_id(t.id) not in self._in_progress_ids:
                 t.state = DownloadState.PAUSED
                 t.pause_requested = False
+                t.cancel_requested = False
                 await self.persist(t, "paused", {})
                 n += 1
         async with self._sched:

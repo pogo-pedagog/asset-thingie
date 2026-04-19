@@ -3384,10 +3384,10 @@ async function Ks(e) {
 	await fetch(`${Ds()}${Q()}/downloads/${Hs(e)}`, { method: "DELETE" });
 }
 async function qs(e) {
-	await $(`${Q()}/downloads/${Hs(e)}/resume`, { method: "POST" });
+	if (!(await $(`${Q()}/downloads/${Hs(e)}/resume`, { method: "POST" })).ok) throw Error("Could not resume: task is not paused or no longer exists.");
 }
 async function Js(e) {
-	await $(`${Q()}/downloads/${Hs(e)}/move-to-top`, { method: "POST" });
+	if (!(await $(`${Q()}/downloads/${Hs(e)}/move-to-top`, { method: "POST" })).ok) throw Error("Could not move to top: task is not queued or could not be reordered.");
 }
 async function Ys() {
 	return $(`${Q()}/downloads/bulk/pause`, { method: "POST" });

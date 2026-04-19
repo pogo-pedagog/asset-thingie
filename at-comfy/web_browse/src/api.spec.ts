@@ -8,6 +8,8 @@ import {
   browseSearch,
   browsePage,
   buildBrowseSearchQuery,
+  resumeTask,
+  moveTaskToTop,
 } from "./api";
 
 describe("api", () => {
@@ -126,5 +128,33 @@ describe("api", () => {
     expect(calledUrl).toContain("/at/browse/civitai/page?");
     expect(calledUrl).toContain("url=");
     expect(calledUrl).toContain("q=foo");
+  });
+
+  it("resumeTask throws when server returns ok false", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () => Promise.resolve(JSON.stringify({ ok: false })),
+        }),
+      ) as unknown as typeof fetch,
+    );
+    await expect(resumeTask("task-uuid")).rejects.toThrow(/not paused/);
+  });
+
+  it("moveTaskToTop throws when server returns ok false", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () => Promise.resolve(JSON.stringify({ ok: false })),
+        }),
+      ) as unknown as typeof fetch,
+    );
+    await expect(moveTaskToTop("task-uuid")).rejects.toThrow(/not queued/);
   });
 });

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pytest
 from aiohttp.test_utils import TestClient, TestServer
-
 from at_comfy.db import get_conn
 from at_comfy.routes import create_test_app
 

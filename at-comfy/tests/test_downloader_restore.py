@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import pytest
-from at_comfy.config import ATComfyConfig
-from at_comfy.downloader import DownloadManager
 from at_comfy.download_store import DownloadStore
+from at_comfy.downloader import DownloadManager
 from at_comfy.models.download import DownloadRequest, DownloadState, DownloadTask
 
 

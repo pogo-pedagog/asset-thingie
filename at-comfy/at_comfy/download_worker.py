@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import logging
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import httpx
 
@@ -19,7 +18,6 @@ from at_comfy.download_cleanup import remove_partial_artifacts
 from at_comfy.enrichment import apply_civarchive_catalog_to_asset, apply_civitai_metadata_from_download
 from at_comfy.models.download import (
     DownloadErrorCode,
-    DownloadRequest,
     DownloadState,
     DownloadTask,
     DuplicateResolution,

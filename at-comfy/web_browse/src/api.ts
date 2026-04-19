@@ -229,11 +229,21 @@ export async function clearTask(id: string): Promise<void> {
 }
 
 export async function resumeTask(id: string): Promise<void> {
-  await fetchJson(`${getApiPrefix()}/downloads/${dlPathSeg(id)}/resume`, { method: "POST" });
+  const data = await fetchJson<{ ok: boolean }>(`${getApiPrefix()}/downloads/${dlPathSeg(id)}/resume`, {
+    method: "POST",
+  });
+  if (!data.ok) {
+    throw new Error("Could not resume: task is not paused or no longer exists.");
+  }
 }
 
 export async function moveTaskToTop(id: string): Promise<void> {
-  await fetchJson(`${getApiPrefix()}/downloads/${dlPathSeg(id)}/move-to-top`, { method: "POST" });
+  const data = await fetchJson<{ ok: boolean }>(`${getApiPrefix()}/downloads/${dlPathSeg(id)}/move-to-top`, {
+    method: "POST",
+  });
+  if (!data.ok) {
+    throw new Error("Could not move to top: task is not queued or could not be reordered.");
+  }
 }
 
 export async function bulkPauseDownloads(): Promise<{ ok: boolean; count: number }> {
