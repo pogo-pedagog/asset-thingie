@@ -1,33 +1,35 @@
-"""Downloader worker helpers."""
+"""Download worker pool."""
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 from at_comfy.config import ATComfyConfig
+from at_comfy.downloader import Downloader
 
 
 @pytest.mark.asyncio
-async def test_semaphore_recreated_when_parallelism_changes() -> None:
-    import at_comfy.downloader as dl
-
-    dl._sem = None
-    dl._sem_capacity = None
-    c2 = ATComfyConfig(max_parallel_downloads=2)
-    c4 = ATComfyConfig(max_parallel_downloads=4)
-    s2 = dl._sem_for(c2)
-    s4 = dl._sem_for(c4)
-    assert s2 is not s4
-    dl._sem = None
-    dl._sem_capacity = None
+async def test_start_spawns_worker_pool(tmp_comfy_base) -> None:
+    dlr = Downloader()
+    cfg = ATComfyConfig(max_parallel_downloads=3)
+    dlr.start(cfg)
+    assert len(dlr._workers) == 3
+    for w in dlr._workers:
+        w.cancel()
+    await asyncio.gather(*dlr._workers, return_exceptions=True)
+    dlr._workers = []
 
 
 @pytest.mark.asyncio
-async def test_semaphore_same_instance_for_same_config() -> None:
-    import at_comfy.downloader as dl
-
-    dl._sem = None
-    dl._sem_capacity = None
-    c = ATComfyConfig(max_parallel_downloads=3)
-    assert dl._sem_for(c) is dl._sem_for(c)
-    dl._sem = None
-    dl._sem_capacity = None
+async def test_start_idempotent_same_parallelism(tmp_comfy_base) -> None:
+    dlr = Downloader()
+    cfg = ATComfyConfig(max_parallel_downloads=2)
+    dlr.start(cfg)
+    w1 = dlr._workers
+    dlr.start(cfg)
+    assert dlr._workers is w1
+    for w in dlr._workers:
+        w.cancel()
+    await asyncio.gather(*dlr._workers, return_exceptions=True)
+    dlr._workers = []

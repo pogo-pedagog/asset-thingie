@@ -47,7 +47,11 @@ async def test_enqueue_from_body_creates_task(tmp_comfy_base, monkeypatch) -> No
             return None
 
     monkeypatch.setattr("at_comfy.download_sources.civitai.CivitaiClient", FakeClient)
-    monkeypatch.setattr("at_comfy.downloader.CivitaiClient", FakeClient)
+    monkeypatch.setattr("at_comfy.download_worker.CivitaiClient", FakeClient)
+    monkeypatch.setattr(
+        "at_comfy.downloader.DownloadManager.start",
+        lambda self, cfg=None: None,
+    )
 
     dlr = Downloader()
     cfg = ATComfyConfig()
@@ -82,7 +86,6 @@ async def test_enqueue_rejects_bad_version(tmp_comfy_base, monkeypatch) -> None:
             return None
 
     monkeypatch.setattr("at_comfy.download_sources.civitai.CivitaiClient", FakeClient)
-    monkeypatch.setattr("at_comfy.downloader.CivitaiClient", FakeClient)
     dlr = Downloader()
     cfg = ATComfyConfig()
     with pytest.raises(ValueError, match="version not found"):

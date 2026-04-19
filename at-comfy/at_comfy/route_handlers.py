@@ -27,6 +27,7 @@ from at_comfy.library_repo import (
     distinct_categories,
     distinct_content_types,
     get_asset_row,
+    library_presence_indices,
     list_assets,
     list_subfolders,
     list_tags_with_counts,
@@ -427,6 +428,22 @@ async def handle_browse_model(request: web.Request) -> web.Response:
         return web.json_response({"error": str(e)}, status=502)
 
 
+async def handle_library_presence(request: web.Request) -> web.Response:
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        return web.json_response({"error": "invalid json"}, status=400)
+    items = body.get("items") if isinstance(body, dict) else None
+    if not isinstance(items, list):
+        return web.json_response({"error": "items required"}, status=400)
+    try:
+        present = library_presence_indices(items)
+    except Exception as e:
+        logger.exception("library presence")
+        return web.json_response({"error": str(e)}, status=500)
+    return web.json_response({"present": present})
+
+
 async def handle_downloads_list(_request: web.Request) -> web.Response:
     store = DownloadStore()
     cfg = load_config()
@@ -444,8 +461,16 @@ def _download_task_public(row: Any, _cfg: ATComfyConfig) -> dict[str, Any]:
     from at_comfy.models.download import DownloadRequest
 
     req = DownloadRequest.model_validate_json(row["request_json"])
+    tid = str(row["id"])
+    rate_bps: float | None = None
+    try:
+        t = _get_downloader().get_task(tid)
+        if t is not None and t.rate_bps is not None:
+            rate_bps = float(t.rate_bps)
+    except Exception:
+        rate_bps = None
     return {
-        "id": row["id"],
+        "id": tid,
         "display_name": req.filename,
         "filename": req.filename,
         "state": row["state"],
@@ -454,6 +479,13 @@ def _download_task_public(row: Any, _cfg: ATComfyConfig) -> dict[str, Any]:
         "error_message": row["error_message"],
         "cover_thumb_url": _cover_thumb_url(row["cover_thumb_path"]),
         "created_at": row["created_at"],
+        "queue_position": int(row["queue_position"] or 0),
+        "paused": str(row["state"]).lower() == "paused",
+        "rate_bps": rate_bps,
+        "source": req.source,
+        "model_id": req.model_id,
+        "version_id": req.version_id,
+        "file_id": req.file_id,
     }
 
 
@@ -515,8 +547,70 @@ async def handle_download_action(request: web.Request, action: str) -> web.Respo
 
 async def handle_download_delete(request: web.Request) -> web.Response:
     tid = request.match_info.get("task_id") or ""
-    DownloadStore().delete_task(tid)
+    dlr = _get_downloader()
+    ok = await dlr.clear_task(tid)
+    if not ok:
+        return web.json_response({"error": "task not found or not in a terminal state"}, status=409)
     return web.json_response({"ok": True})
+
+
+async def handle_download_resume(request: web.Request) -> web.Response:
+    tid = request.match_info.get("task_id") or ""
+    dlr = _get_downloader()
+    ok = await dlr.resume(tid)
+    return web.json_response({"ok": ok})
+
+
+async def handle_download_move_top(request: web.Request) -> web.Response:
+    tid = request.match_info.get("task_id") or ""
+    dlr = _get_downloader()
+    ok = await dlr.move_to_top(tid)
+    return web.json_response({"ok": ok})
+
+
+async def handle_bulk_pause(_request: web.Request) -> web.Response:
+    dlr = _get_downloader()
+    n = await dlr.bulk_pause()
+    return web.json_response({"ok": True, "count": n})
+
+
+async def handle_bulk_resume(_request: web.Request) -> web.Response:
+    dlr = _get_downloader()
+    n = await dlr.bulk_resume()
+    return web.json_response({"ok": True, "count": n})
+
+
+async def handle_bulk_retry_failed(_request: web.Request) -> web.Response:
+    dlr = _get_downloader()
+    n = await dlr.bulk_retry_failed()
+    return web.json_response({"ok": True, "count": n})
+
+
+async def handle_bulk_clear_finished(_request: web.Request) -> web.Response:
+    dlr = _get_downloader()
+    n = await dlr.clear_completed()
+    return web.json_response({"ok": True, "count": n})
+
+
+async def handle_bulk_clear_done(_request: web.Request) -> web.Response:
+    dlr = _get_downloader()
+    n = await dlr.clear_all_terminal()
+    return web.json_response({"ok": True, "count": n})
+
+
+def schedule_download_restore() -> None:
+    """Run once when the asyncio loop is active (Comfy startup)."""
+
+    async def _run() -> None:
+        try:
+            await _get_downloader().restore_queue()
+        except Exception:
+            logger.exception("download queue restore failed")
+
+    try:
+        asyncio.get_running_loop().create_task(_run())
+    except RuntimeError:
+        pass
 
 
 async def handle_config_get(_request: web.Request) -> web.Response:
@@ -598,6 +692,7 @@ def register_all(routes: Any) -> None:
     routes.get("/at/subfolders")(handle_subfolders)
     routes.get("/at/library/clean-preview")(handle_clean_preview)
     routes.post("/at/library/clean")(handle_clean_confirm)
+    routes.post("/at/library/presence")(handle_library_presence)
     routes.get("/at/assets")(handle_assets)
     routes.post("/at/assets/batch/re-enrich")(handle_batch_re_enrich)
     routes.get("/at/assets/{asset_id}")(handle_asset_detail)
@@ -619,6 +714,13 @@ def register_all(routes: Any) -> None:
     routes.post("/at/downloads/{task_id}/cancel")(handle_dl_cancel)
     routes.post("/at/downloads/{task_id}/retry")(handle_dl_retry)
     routes.post("/at/downloads/{task_id}/pause")(handle_dl_pause)
+    routes.post("/at/downloads/{task_id}/resume")(handle_download_resume)
+    routes.post("/at/downloads/{task_id}/move-to-top")(handle_download_move_top)
+    routes.post("/at/downloads/bulk/pause")(handle_bulk_pause)
+    routes.post("/at/downloads/bulk/resume")(handle_bulk_resume)
+    routes.post("/at/downloads/bulk/retry-failed")(handle_bulk_retry_failed)
+    routes.post("/at/downloads/bulk/clear-finished")(handle_bulk_clear_finished)
+    routes.post("/at/downloads/bulk/clear-done")(handle_bulk_clear_done)
     routes.delete("/at/downloads/{task_id}")(handle_download_delete)
     routes.get("/at/config")(handle_config_get)
     routes.put("/at/config")(handle_config_put)
@@ -636,6 +738,7 @@ def mount_on_app(app: web.Application) -> None:
     app.router.add_get("/at/subfolders", handle_subfolders)
     app.router.add_get("/at/library/clean-preview", handle_clean_preview)
     app.router.add_post("/at/library/clean", handle_clean_confirm)
+    app.router.add_post("/at/library/presence", handle_library_presence)
     app.router.add_get("/at/assets", handle_assets)
     app.router.add_post("/at/assets/batch/re-enrich", handle_batch_re_enrich)
     app.router.add_get("/at/assets/{asset_id}", handle_asset_detail)
@@ -657,6 +760,13 @@ def mount_on_app(app: web.Application) -> None:
     app.router.add_post("/at/downloads/{task_id}/cancel", handle_dl_cancel)
     app.router.add_post("/at/downloads/{task_id}/retry", handle_dl_retry)
     app.router.add_post("/at/downloads/{task_id}/pause", handle_dl_pause)
+    app.router.add_post("/at/downloads/{task_id}/resume", handle_download_resume)
+    app.router.add_post("/at/downloads/{task_id}/move-to-top", handle_download_move_top)
+    app.router.add_post("/at/downloads/bulk/pause", handle_bulk_pause)
+    app.router.add_post("/at/downloads/bulk/resume", handle_bulk_resume)
+    app.router.add_post("/at/downloads/bulk/retry-failed", handle_bulk_retry_failed)
+    app.router.add_post("/at/downloads/bulk/clear-finished", handle_bulk_clear_finished)
+    app.router.add_post("/at/downloads/bulk/clear-done", handle_bulk_clear_done)
     app.router.add_delete("/at/downloads/{task_id}", handle_download_delete)
     app.router.add_get("/at/config", handle_config_get)
     app.router.add_put("/at/config", handle_config_put)

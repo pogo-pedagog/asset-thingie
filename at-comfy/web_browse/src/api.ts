@@ -184,6 +184,22 @@ export async function postDownloadBatch(
   });
 }
 
+export interface LibraryPresenceItem {
+  source: string;
+  version_id: number | string;
+  file_id?: number | string | null;
+}
+
+export async function postLibraryPresence(
+  items: LibraryPresenceItem[],
+): Promise<{ present: number[] }> {
+  return fetchJson(`${getApiPrefix()}/library/presence`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items }),
+  });
+}
+
 export async function fetchDownloads(): Promise<{
   tasks: DownloadTaskRow[];
   completed_since_last_poll: string[];
@@ -207,8 +223,37 @@ export async function pauseTask(id: string): Promise<void> {
   await fetchJson(`${getApiPrefix()}/downloads/${dlPathSeg(id)}/pause`, { method: "POST" });
 }
 
-export async function deleteTask(id: string): Promise<void> {
+/** Remove a terminal task row only (HTTP 409 if still active). */
+export async function clearTask(id: string): Promise<void> {
   await fetch(`${getRequestOrigin()}${getApiPrefix()}/downloads/${dlPathSeg(id)}`, { method: "DELETE" });
+}
+
+export async function resumeTask(id: string): Promise<void> {
+  await fetchJson(`${getApiPrefix()}/downloads/${dlPathSeg(id)}/resume`, { method: "POST" });
+}
+
+export async function moveTaskToTop(id: string): Promise<void> {
+  await fetchJson(`${getApiPrefix()}/downloads/${dlPathSeg(id)}/move-to-top`, { method: "POST" });
+}
+
+export async function bulkPauseDownloads(): Promise<{ ok: boolean; count: number }> {
+  return fetchJson(`${getApiPrefix()}/downloads/bulk/pause`, { method: "POST" });
+}
+
+export async function bulkResumeDownloads(): Promise<{ ok: boolean; count: number }> {
+  return fetchJson(`${getApiPrefix()}/downloads/bulk/resume`, { method: "POST" });
+}
+
+export async function bulkRetryFailedDownloads(): Promise<{ ok: boolean; count: number }> {
+  return fetchJson(`${getApiPrefix()}/downloads/bulk/retry-failed`, { method: "POST" });
+}
+
+export async function bulkClearFinishedDownloads(): Promise<{ ok: boolean; count: number }> {
+  return fetchJson(`${getApiPrefix()}/downloads/bulk/clear-finished`, { method: "POST" });
+}
+
+export async function bulkClearDoneDownloads(): Promise<{ ok: boolean; count: number }> {
+  return fetchJson(`${getApiPrefix()}/downloads/bulk/clear-done`, { method: "POST" });
 }
 
 export async function fetchConfig(): Promise<AtComfyPublicConfig> {

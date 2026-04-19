@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import UTC, datetime
 from uuid import UUID
@@ -43,8 +44,9 @@ class DownloadStore:
                 id, request_json, state, bytes_done, total_bytes,
                 error_message, error_code, retry_count,
                 cancel_requested, pause_requested, cover_thumb_path,
-                queue_position, batch_id, ui_order, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                queue_position, batch_id, ui_order, created_at, updated_at,
+                resume_verify_only
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 normalize_download_task_id(task.id),
@@ -63,6 +65,7 @@ class DownloadStore:
                 task.ui_order,
                 task.created_at.isoformat().replace("+00:00", "Z"),
                 task.updated_at.isoformat().replace("+00:00", "Z"),
+                1 if task.resume_verify_only else 0,
             ),
         )
         conn.commit()
@@ -75,6 +78,7 @@ class DownloadStore:
                 state = ?, bytes_done = ?, total_bytes = ?,
                 error_message = ?, error_code = ?, retry_count = ?,
                 cancel_requested = ?, pause_requested = ?, cover_thumb_path = ?,
+                resume_verify_only = ?,
                 updated_at = ?
             WHERE id = ?
             """,
@@ -88,6 +92,7 @@ class DownloadStore:
                 1 if task.cancel_requested else 0,
                 1 if task.pause_requested else 0,
                 task.cover_thumb_path,
+                1 if task.resume_verify_only else 0,
                 _now_iso(),
                 normalize_download_task_id(task.id),
             ),
@@ -113,6 +118,42 @@ class DownloadStore:
         conn.execute("DELETE FROM download_tasks WHERE id = ?", (normalize_download_task_id(task_id),))
         conn.commit()
 
+    def delete_tasks_by_states(self, states: list[str]) -> int:
+        """Delete rows whose state is in ``states``; returns deleted count."""
+        if not states:
+            return 0
+        conn = get_conn()
+        placeholders = ",".join("?" * len(states))
+        cur = conn.execute(
+            f"DELETE FROM download_tasks WHERE state IN ({placeholders})",
+            tuple(states),
+        )
+        conn.commit()
+        return int(cur.rowcount or 0)
+
+    def clear_terminal_tasks(self) -> int:
+        """Delete completed, failed, cancelled, and skipped tasks."""
+        return self.delete_tasks_by_states(["completed", "failed", "cancelled", "skipped"])
+
+    def append_log(self, task_id: str | object, event: str, detail: dict | None = None) -> None:
+        conn = get_conn()
+        conn.execute(
+            """
+            INSERT INTO download_operation_log (task_id, event, detail_json, at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                normalize_download_task_id(task_id),
+                event,
+                json.dumps(detail or {}),
+                _now_iso(),
+            ),
+        )
+        conn.commit()
+
+    def load_all_tasks(self) -> list[DownloadTask]:
+        return [self._row_to_task(r) for r in self.list_tasks()]
+
     def _row_to_task(self, row: sqlite3.Row) -> DownloadTask:
         req = DownloadRequest.model_validate_json(row["request_json"])
         ec_raw = row["error_code"]
@@ -120,6 +161,9 @@ class DownloadStore:
             ec = DownloadErrorCode(str(ec_raw)) if ec_raw else DownloadErrorCode.NONE
         except ValueError:
             ec = DownloadErrorCode.UNKNOWN
+
+        keys = row.keys()
+        resume_v = bool(row["resume_verify_only"]) if "resume_verify_only" in keys else False
 
         return DownloadTask(
             id=UUID(row["id"]),
@@ -136,4 +180,5 @@ class DownloadStore:
             queue_position=int(row["queue_position"] or 0),
             ui_order=int(row["ui_order"] or 0),
             batch_id=UUID(row["batch_id"]) if row["batch_id"] else None,
+            resume_verify_only=resume_v,
         )

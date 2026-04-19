@@ -310,6 +310,20 @@ def _schema_v6(conn: sqlite3.Connection) -> None:
     )
 
 
+def _schema_v7(conn: sqlite3.Connection) -> None:
+    """Download tasks: persist ``resume_verify_only`` across restarts."""
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='download_tasks' LIMIT 1",
+    ).fetchone()
+    if not row:
+        return
+    cols = {str(r[1]) for r in conn.execute("PRAGMA table_info(download_tasks)").fetchall()}
+    if "resume_verify_only" not in cols:
+        conn.execute(
+            "ALTER TABLE download_tasks ADD COLUMN resume_verify_only INTEGER NOT NULL DEFAULT 0",
+        )
+
+
 def migrate(conn: sqlite3.Connection) -> None:
     """Apply pending migrations in order; each step commits DDL + PRAGMA user_version together."""
     steps: list[tuple[int, Callable[[sqlite3.Connection], None]]] = [
@@ -319,6 +333,7 @@ def migrate(conn: sqlite3.Connection) -> None:
         (4, _schema_v4),
         (5, _schema_v5),
         (6, _schema_v6),
+        (7, _schema_v7),
     ]
     for target, schema_fn in steps:
         if _user_version(conn) >= target:

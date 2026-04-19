@@ -436,11 +436,13 @@ export const useBrowseStore = defineStore("at-browse", () => {
   async function openModel(id: number | string): Promise<void> {
     const src = activeSource.value;
     const itemRef = String(id);
+    error.value = null;
     detailLoading.value = true;
     sl().selected = null;
     try {
       const raw = await api.browseDetail(src, itemRef, !hideNsfwFromConfig.value);
       sl().selected = raw as unknown as CivitaiModelDetail;
+      error.value = null;
     } catch (e) {
       error.value = e instanceof Error ? e.message : "Detail failed";
     } finally {

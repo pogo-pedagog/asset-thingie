@@ -121,6 +121,17 @@ export interface DownloadTaskRow {
   error_message: string | null;
   cover_thumb_url: string | null;
   created_at: string;
+  queue_position?: number;
+  paused?: boolean;
+  rate_bps?: number | null;
+  /** Remote source key (``civitai`` \| ``civarchive``). */
+  source?: string;
+  model_id?: number;
+  version_id?: number;
+  file_id?: number;
+  /** Some payloads may use camelCase aliases. */
+  versionId?: number;
+  fileId?: number;
 }
 
 /** Legacy alias used in early scaffold */

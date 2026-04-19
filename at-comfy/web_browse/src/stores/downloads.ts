@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import * as api from "../api";
 import type { DownloadTaskRow } from "../types";
 
@@ -9,6 +9,16 @@ const POLL_SLOW_MS = 10_000;
 function isTaskActive(state: string): boolean {
   const s = state.toLowerCase();
   return s === "queued" || s === "downloading" || s === "verifying";
+}
+
+/** User-facing message after queueing one or more downloads. */
+export function formatQueuedToast(count: number, skipped?: number): string {
+  const n = Math.max(0, Math.floor(count));
+  const base = n === 1 ? "1 download added" : `${n} downloads added`;
+  if (skipped != null && skipped > 0) {
+    return `${base} (${skipped} skipped)`;
+  }
+  return base;
 }
 
 function showToast(msg: string, durationMs = 3500): void {
@@ -112,6 +122,20 @@ export const useDownloadsStore = defineStore("at-downloads", () => {
     }
   }
 
+  function stateOf(t: DownloadTaskRow): string {
+    return String(t.state || "").toLowerCase();
+  }
+
+  const numBulkPause = computed(() =>
+    tasks.value.filter((x) => ["queued", "downloading", "verifying"].includes(stateOf(x))).length,
+  );
+  const numPaused = computed(() => tasks.value.filter((x) => stateOf(x) === "paused").length);
+  const numFailed = computed(() => tasks.value.filter((x) => stateOf(x) === "failed").length);
+  const numCompleted = computed(() => tasks.value.filter((x) => stateOf(x) === "completed").length);
+  const numTerminal = computed(() =>
+    tasks.value.filter((x) => ["completed", "failed", "cancelled", "skipped"].includes(stateOf(x))).length,
+  );
+
   return {
     tasks,
     loading,
@@ -122,5 +146,10 @@ export const useDownloadsStore = defineStore("at-downloads", () => {
     startPolling,
     stopPolling,
     showToast,
+    numBulkPause,
+    numPaused,
+    numFailed,
+    numCompleted,
+    numTerminal,
   };
 });

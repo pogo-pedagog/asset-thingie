@@ -8,10 +8,12 @@ import BrowseFilters from "./components/BrowseFilters.vue";
 import BrowseResultGrid from "./components/BrowseResultGrid.vue";
 import BrowseDetailHost from "./components/BrowseDetailHost.vue";
 import ConfigPanel from "./components/ConfigPanel.vue";
+import DownloadsTab from "./components/DownloadsTab.vue";
 import { browseSourceOptions } from "./sources/registry";
 import type { BrowseSourceId } from "./sources/types";
 import type { CivitaiModelDetail } from "./types";
 import { pickDefaultDownloadSpec } from "./utils/downloadSpec";
+import { formatQueuedToast } from "./stores/downloads";
 
 const browse = useBrowseStore();
 const dl = useDownloadsStore();
@@ -29,7 +31,7 @@ const {
   hasMore,
   stoppedReason,
 } = storeToRefs(browse);
-const { tasks, activeTab } = storeToRefs(dl);
+const { activeTab } = storeToRefs(dl);
 
 /** Scrollport for browse grid; IntersectionObserver is unreliable in nested overflow / iframe. */
 const scrollRoot = ref<HTMLElement | null>(null);
@@ -116,8 +118,8 @@ function onTab(name: "browse" | "downloads" | "settings"): void {
   if (name === "downloads") void dl.refresh();
 }
 
-async function onDetailDownloaded(): Promise<void> {
-  dl.showToast("Download queued");
+async function onDetailDownloaded(payload: { count: number }): Promise<void> {
+  dl.showToast(formatQueuedToast(payload.count));
   void dl.refresh();
 }
 
@@ -156,8 +158,8 @@ async function batchDownloadSelected(): Promise<void> {
     return;
   }
   try {
-    await api.postDownloadBatch(payload, duplicateResolution.value);
-    dl.showToast(`Queued ${payload.length} download(s)`);
+    const res = await api.postDownloadBatch(payload, duplicateResolution.value);
+    dl.showToast(formatQueuedToast(res.task_ids.length, res.skipped.length));
     void dl.refresh();
     browse.clearBatch();
   } catch (e) {
@@ -165,64 +167,6 @@ async function batchDownloadSelected(): Promise<void> {
   }
 }
 
-function canCancel(state: string): boolean {
-  const s = state.toLowerCase();
-  return s === "queued" || s === "downloading" || s === "verifying";
-}
-
-function canPause(state: string): boolean {
-  const s = state.toLowerCase();
-  return s === "downloading" || s === "verifying";
-}
-
-function canRetry(state: string): boolean {
-  return state.toLowerCase() === "failed";
-}
-
-function canRemove(state: string): boolean {
-  const s = state.toLowerCase();
-  return s === "completed" || s === "failed" || s === "cancelled" || s === "skipped" || s === "paused";
-}
-
-function setDlError(msg: string): void {
-  dl.$patch({ error: msg });
-}
-
-async function onPause(id: string): Promise<void> {
-  try {
-    await api.pauseTask(id);
-    void dl.refresh();
-  } catch (e) {
-    setDlError(e instanceof Error ? e.message : "Pause failed");
-  }
-}
-
-async function onCancelDl(id: string): Promise<void> {
-  try {
-    await api.cancelTask(id);
-    void dl.refresh();
-  } catch (e) {
-    setDlError(e instanceof Error ? e.message : "Cancel failed");
-  }
-}
-
-async function onRetryDl(id: string): Promise<void> {
-  try {
-    await api.retryTask(id);
-    void dl.refresh();
-  } catch (e) {
-    setDlError(e instanceof Error ? e.message : "Retry failed");
-  }
-}
-
-async function onRemoveDl(id: string): Promise<void> {
-  try {
-    await api.deleteTask(id);
-    void dl.refresh();
-  } catch (e) {
-    setDlError(e instanceof Error ? e.message : "Remove failed");
-  }
-}
 </script>
 
 <template>
@@ -284,7 +228,7 @@ async function onRemoveDl(id: string): Promise<void> {
           v-else-if="selected"
           :model="selected as CivitaiModelDetail"
           @close="browse.closeDetail()"
-          @downloaded="onDetailDownloaded()"
+          @downloaded="onDetailDownloaded($event)"
           @error="onDetailError"
         />
       </div>
@@ -298,35 +242,7 @@ async function onRemoveDl(id: string): Promise<void> {
     </div>
 
     <div v-else-if="activeTab === 'downloads'" class="at-browse-app__panel">
-      <p v-if="dl.error" class="at-err">{{ dl.error }}</p>
-      <ul class="at-dl-list">
-        <li v-for="t in tasks" :key="t.id" class="at-dl">
-          <div class="at-dl__row">
-            <img
-              v-if="api.resolveCacheUrl(t.cover_thumb_url)"
-              class="at-dl__thumb"
-              :src="api.resolveCacheUrl(t.cover_thumb_url)!"
-              alt=""
-            />
-            <div class="at-dl__main">
-              <div class="at-dl__title">{{ t.display_name || t.filename }} — {{ t.state }}</div>
-              <div v-if="t.error_message" class="at-dl__err">{{ t.error_message }}</div>
-              <div v-if="t.total_bytes" class="at-dl__bar">
-                <div
-                  class="at-dl__fill"
-                  :style="{ width: `${Math.min(100, Math.round((100 * t.bytes_done) / (t.total_bytes || 1)))}%` }"
-                />
-              </div>
-            </div>
-          </div>
-          <div class="at-dl__actions">
-            <button v-if="canCancel(t.state)" type="button" class="at-btn at-btn--sm" @click="onCancelDl(t.id)">Cancel</button>
-            <button v-if="canPause(t.state)" type="button" class="at-btn at-btn--sm" @click="onPause(t.id)">Pause</button>
-            <button v-if="canRetry(t.state)" type="button" class="at-btn at-btn--sm" @click="onRetryDl(t.id)">Retry</button>
-            <button v-if="canRemove(t.state)" type="button" class="at-btn at-btn--sm" @click="onRemoveDl(t.id)">Remove</button>
-          </div>
-        </li>
-      </ul>
+      <DownloadsTab />
     </div>
 
     <div v-else class="at-browse-app__panel at-browse-app__panel--scroll">
@@ -439,6 +355,10 @@ async function onRemoveDl(id: string): Promise<void> {
   color: inherit;
   cursor: pointer;
 }
+.at-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 .at-btn--on {
   background: color-mix(in srgb, #6af 22%, transparent);
 }
@@ -471,57 +391,5 @@ async function onRemoveDl(id: string): Promise<void> {
   border-radius: 6px;
   background: color-mix(in srgb, var(--fg-color, #888) 8%, transparent);
   font-size: 0.8rem;
-}
-.at-dl-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.at-dl {
-  border: 1px solid color-mix(in srgb, var(--fg-color, #888) 15%, transparent);
-  border-radius: 6px;
-  padding: 0.4rem;
-  margin-bottom: 0.35rem;
-}
-.at-dl__row {
-  display: flex;
-  gap: 0.5rem;
-  align-items: flex-start;
-}
-.at-dl__thumb {
-  width: 48px;
-  height: 48px;
-  object-fit: cover;
-  border-radius: 4px;
-  flex-shrink: 0;
-}
-.at-dl__main {
-  flex: 1;
-  min-width: 0;
-}
-.at-dl__title {
-  font-size: 0.8rem;
-}
-.at-dl__err {
-  font-size: 0.72rem;
-  color: #f88;
-  margin-top: 0.2rem;
-}
-.at-dl__bar {
-  height: 4px;
-  background: color-mix(in srgb, var(--fg-color, #888) 15%, transparent);
-  border-radius: 2px;
-  margin: 0.35rem 0 0;
-  overflow: hidden;
-}
-.at-dl__fill {
-  height: 100%;
-  background: color-mix(in srgb, #6af 60%, transparent);
-}
-.at-dl__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-  margin-top: 0.35rem;
 }
 </style>

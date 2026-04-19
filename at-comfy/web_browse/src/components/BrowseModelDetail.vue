@@ -7,6 +7,8 @@ import { filterFamilyForModelType } from "../utils/filterFamilyForModelType";
 import ImageMetaLightbox from "@at-shared/ImageMetaLightbox.vue";
 import * as api from "../api";
 import { useBrowseStore } from "../stores/browse";
+import { useDownloadsStore } from "../stores/downloads";
+import { useDownloadGate } from "../composables/useDownloadGate";
 
 const props = defineProps<{
   model: CivitaiModelDetail;
@@ -62,11 +64,13 @@ function fileSelectLabel(f: CivitaiFileSummary): string {
 
 const emit = defineEmits<{
   close: [];
-  downloaded: [];
+  downloaded: [payload: { count: number }];
   error: [msg: string];
 }>();
 
 const { category, duplicateResolution, hideEarlyAccessFromConfig } = storeToRefs(useBrowseStore());
+const dlStore = useDownloadsStore();
+const { tasks: downloadTasks } = storeToRefs(dlStore);
 
 const versionIndex = ref(0);
 const fileIndex = ref(0);
@@ -192,14 +196,29 @@ async function copyText(text: string): Promise<void> {
   }
 }
 
-function pickFileForDownload(): { versionId: number; fileId: number } | null {
+function pickFileForDownload(): { versionId: number; fileId: number; basename: string } | null {
   const v = currentVersion.value;
   const files = currentFiles.value;
   if (!v || !files.length) return null;
   const f = files[fileIndex.value] ?? files[0];
   if (!f?.id) return null;
-  return { versionId: v.id, fileId: f.id };
+  const basename = (f.name?.trim() || `file_${f.id}`).trim();
+  return { versionId: v.id, fileId: f.id, basename };
 }
+
+const {
+  downloadDisabled,
+  downloadDisabledTitle,
+  markJustQueued,
+  clearJustQueued,
+  newVersionCountForAll,
+} = useDownloadGate({
+  effectiveSource: computed(() => (props.model.source === "civarchive" ? "civarchive" : "civitai")),
+  versions,
+  hideEarlyAccess: hideEarlyAccessFromConfig,
+  tasks: downloadTasks,
+  pickVersionAndFileIds: pickFileForDownload,
+});
 
 async function downloadCurrent(): Promise<void> {
   if (currentVersionIsEarlyAccess.value) return;
@@ -208,6 +227,7 @@ async function downloadCurrent(): Promise<void> {
     emit("error", "No file on this version");
     return;
   }
+  markJustQueued();
   try {
     if (props.model.source === "civarchive") {
       const mid = typeof props.model.id === "number" ? props.model.id : Number(props.model.id);
@@ -231,8 +251,9 @@ async function downloadCurrent(): Promise<void> {
         duplicate_resolution: duplicateResolution.value,
       });
     }
-    emit("downloaded");
+    emit("downloaded", { count: 1 });
   } catch (e) {
+    clearJustQueued();
     emit("error", e instanceof Error ? e.message : "Download failed");
   }
 }
@@ -271,7 +292,7 @@ async function downloadAllVersions(): Promise<void> {
   }
   try {
     await api.postDownloadBatch(items, duplicateResolution.value);
-    emit("downloaded");
+    emit("downloaded", { count: items.length });
   } catch (e) {
     emit("error", e instanceof Error ? e.message : "Batch download failed");
   }
@@ -438,13 +459,21 @@ const description = computed(() => props.model.description?.trim() || "");
         Early-access version — not downloadable here.
       </p>
       <div class="model-detail__dl-btns">
-        <button v-if="!currentVersionIsEarlyAccess" type="button" class="at-btn" @click="downloadCurrent">
+        <button
+          v-if="!currentVersionIsEarlyAccess"
+          type="button"
+          class="at-btn"
+          :disabled="downloadDisabled"
+          :title="downloadDisabled ? downloadDisabledTitle : ''"
+          @click="downloadCurrent"
+        >
           Download
         </button>
         <button
           v-if="downloadableVersionCount > 1"
           type="button"
           class="at-btn"
+          :title="`Queues one file per version; about ${newVersionCountForAll} not already in the library (duplicates may be skipped by the server)`"
           @click="downloadAllVersions"
         >
           Download all versions
@@ -530,6 +559,10 @@ const description = computed(() => props.model.description?.trim() || "");
   background: transparent;
   color: inherit;
   cursor: pointer;
+}
+.at-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 .at-btn--sm {
   font-size: 0.75rem;

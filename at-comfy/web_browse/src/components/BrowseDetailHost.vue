@@ -8,7 +8,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: [];
-  downloaded: [];
+  downloaded: [payload: { count: number }];
   error: [msg: string];
 }>();
 </script>
@@ -18,7 +18,7 @@ const emit = defineEmits<{
     <BrowseModelDetail
       :model="props.model"
       @close="emit('close')"
-      @downloaded="emit('downloaded')"
+      @downloaded="emit('downloaded', $event)"
       @error="emit('error', $event)"
     />
     <section

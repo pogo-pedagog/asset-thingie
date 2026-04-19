@@ -451,3 +451,65 @@ def parse_trigger_words_json(raw: str | None) -> list[str]:
     except json.JSONDecodeError:
         pass
     return []
+
+
+def civitai_version_ids_in_library(conn: sqlite3.Connection, version_ids: list[int]) -> set[int]:
+    """``library_files`` rows enriched with Civitai version id."""
+    if not version_ids:
+        return set()
+    placeholders = ",".join("?" * len(version_ids))
+    rows = conn.execute(
+        f"SELECT DISTINCT civitai_version_id FROM library_files WHERE civitai_version_id IN ({placeholders})",
+        version_ids,
+    ).fetchall()
+    return {int(r["civitai_version_id"]) for r in rows if r["civitai_version_id"] is not None}
+
+
+def civarchive_version_ids_in_library(conn: sqlite3.Connection, version_ids: list[str]) -> set[str]:
+    """``source_metadata`` rows for CivArchive-normalized assets."""
+    if not version_ids:
+        return set()
+    placeholders = ",".join("?" * len(version_ids))
+    rows = conn.execute(
+        f"""
+        SELECT DISTINCT external_version_id FROM source_metadata
+        WHERE source = 'civarchive' AND external_version_id IN ({placeholders})
+        """,
+        version_ids,
+    ).fetchall()
+    return {str(r["external_version_id"]) for r in rows if r["external_version_id"] is not None}
+
+
+def library_presence_indices(items: list[dict[str, Any]]) -> list[int]:
+    """Return indices into ``items`` for versions already present in the scanned library."""
+    civitai_buckets: dict[int, list[int]] = {}
+    civarchive_buckets: dict[str, list[int]] = {}
+    for i, raw in enumerate(items):
+        if not isinstance(raw, dict):
+            continue
+        src = str(raw.get("source") or "").strip().lower()
+        if src == "civitai":
+            try:
+                vid = int(raw["version_id"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            civitai_buckets.setdefault(vid, []).append(i)
+        elif src == "civarchive":
+            vid = raw.get("version_id")
+            if vid is None:
+                continue
+            key = str(vid).strip()
+            if not key:
+                continue
+            civarchive_buckets.setdefault(key, []).append(i)
+    present: set[int] = set()
+    conn = get_conn()
+    if civitai_buckets:
+        found = civitai_version_ids_in_library(conn, list(civitai_buckets.keys()))
+        for vid in found:
+            present.update(civitai_buckets.get(vid, ()))
+    if civarchive_buckets:
+        found_ca = civarchive_version_ids_in_library(conn, list(civarchive_buckets.keys()))
+        for vid in found_ca:
+            present.update(civarchive_buckets.get(vid, ()))
+    return sorted(present)

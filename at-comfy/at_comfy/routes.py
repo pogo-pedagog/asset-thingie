@@ -19,9 +19,10 @@ def register_routes() -> None:
         logger.debug("at_comfy: server.PromptServer not available (skip route registration)")
         return
 
-    from at_comfy.route_handlers import register_all
+    from at_comfy.route_handlers import register_all, schedule_download_restore
 
     register_all(PromptServer.instance.routes)
+    schedule_download_restore()
     _registered = True
     logger.info("at_comfy: registered /at/* routes")
     try:
