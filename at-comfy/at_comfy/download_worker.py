@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import hashlib
+import asyncio
 import logging
 import os
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -16,6 +17,8 @@ from at_comfy.config import ATComfyConfig
 from at_comfy.db import get_conn
 from at_comfy.download_cleanup import remove_partial_artifacts
 from at_comfy.enrichment import apply_civarchive_catalog_to_asset, apply_civitai_metadata_from_download
+from at_comfy.hashing import file_sha256_interruptible
+from at_comfy.install_paths import comfy_folder_for_model_type
 from at_comfy.models.download import (
     DownloadErrorCode,
     DownloadState,
@@ -40,11 +43,13 @@ _TERMINAL_STATES = frozenset(
 )
 
 
-def _family_for_type(task: DownloadTask) -> str:
-    lab = (task.request.content_type_label or "").lower()
-    if "checkpoint" in lab:
+def _scan_family_for_task(task: DownloadTask) -> str | None:
+    key = comfy_folder_for_model_type(task.request.content_type_label or "")
+    if key == "loras":
+        return "loras"
+    if key == "checkpoints":
         return "checkpoints"
-    return "loras"
+    return None
 
 
 async def process_download(manager: DownloadManager, task: DownloadTask, cfg: ATComfyConfig) -> None:
@@ -207,29 +212,32 @@ async def _run_verify_and_finish(
 
     try:
         if task.request.expected_sha256:
-            hasher = hashlib.sha256()
-            with open(dest, "rb") as f:
-                while True:
-                    live = manager.get_task(tid)
-                    if live and live.cancel_requested:
-                        task = live
-                        if allow_delete_dest_on_cancel:
-                            dest.unlink(missing_ok=True)
-                        remove_partial_artifacts(task.request)
-                        await _finalize_cancelled(manager, task)
-                        return
-                    if live and live.pause_requested:
-                        task = live
-                        task.state = DownloadState.PAUSED
-                        task.pause_requested = False
-                        task.bytes_done = dest.stat().st_size if dest.exists() else task.bytes_done
-                        await manager.persist(task, "paused", {})
-                        return
-                    chunk = f.read(65536)
-                    if not chunk:
-                        break
-                    hasher.update(chunk)
-            if hasher.hexdigest().upper() != (task.request.expected_sha256 or "").upper():
+
+            def _should_stop() -> bool:
+                live = manager.get_task(tid)
+                if live is None:
+                    return True
+                return bool(live.cancel_requested or live.pause_requested)
+
+            digest = await asyncio.to_thread(file_sha256_interruptible, dest, _should_stop)
+            live = manager.get_task(tid)
+            if live and live.cancel_requested:
+                task = live
+                if allow_delete_dest_on_cancel:
+                    dest.unlink(missing_ok=True)
+                remove_partial_artifacts(task.request)
+                await _finalize_cancelled(manager, task)
+                return
+            if live and live.pause_requested:
+                task = live
+                task.state = DownloadState.PAUSED
+                task.pause_requested = False
+                task.bytes_done = dest.stat().st_size if dest.exists() else task.bytes_done
+                await manager.persist(task, "paused", {})
+                return
+            if digest is None:
+                return
+            if digest.upper() != (task.request.expected_sha256 or "").upper():
                 dest.unlink(missing_ok=True)
                 task.state = DownloadState.FAILED
                 task.error_code = DownloadErrorCode.CHECKSUM_MISMATCH
@@ -241,7 +249,11 @@ async def _run_verify_and_finish(
         task.bytes_done = dest.stat().st_size if dest.exists() else 0
         await manager.persist(task, "completed", {"bytes": task.bytes_done})
         manager.mark_completed_public(tid)
-        await index_one_file(dest, scan_family=_family_for_type(task), config=cfg, force_hash=True)
+        scan_fam = _scan_family_for_task(task)
+        if scan_fam is not None:
+            await index_one_file(dest, scan_family=scan_fam, config=cfg, force_hash=True)
+        if scan_fam is None:
+            return
         if task.request.source == "civitai":
             try:
                 snap = task.request.model_json_snapshot
@@ -367,6 +379,13 @@ async def _stream_one_url_to_part(
                 start = 0
             done = start
 
+            flush_bytes = 4 * 1024 * 1024
+            persist_interval_s = 1.0
+            persist_bytes = 16 * 1024 * 1024
+            write_buf = bytearray()
+            last_persist_t = time.monotonic()
+            last_persist_bytes = done
+
             with open(part, mode) as out:
                 async for chunk in resp.aiter_bytes():
                     live = manager.get_task(tid)
@@ -374,8 +393,16 @@ async def _stream_one_url_to_part(
                         return "stopped"
                     if live.cancel_requested:
                         task = live
+                        if write_buf:
+                            data = bytes(write_buf)
+                            write_buf.clear()
+                            await asyncio.to_thread(out.write, data)
                         break
                     if live.pause_requested:
+                        if write_buf:
+                            data = bytes(write_buf)
+                            write_buf.clear()
+                            await asyncio.to_thread(out.write, data)
                         out.flush()
                         try:
                             os.fsync(out.fileno())
@@ -390,13 +417,28 @@ async def _stream_one_url_to_part(
                         task.error_code = DownloadErrorCode.NONE
                         await manager.persist(task, "paused", {})
                         return "stopped"
-                    out.write(chunk)
+                    write_buf.extend(chunk)
                     done += len(chunk)
                     task.bytes_done = done
                     task.touch_download_rate(done)
                     if task.total_bytes is None:
                         task.total_bytes = done
-                    await manager.persist(task)
+                    if len(write_buf) >= flush_bytes:
+                        data = bytes(write_buf)
+                        write_buf.clear()
+                        await asyncio.to_thread(out.write, data)
+                    dt = time.monotonic() - last_persist_t
+                    if dt >= persist_interval_s or (done - last_persist_bytes) >= persist_bytes:
+                        last_persist_t = time.monotonic()
+                        last_persist_bytes = done
+                        await manager.persist(task)
+                if write_buf:
+                    data = bytes(write_buf)
+                    write_buf.clear()
+                    await asyncio.to_thread(out.write, data)
+                last_persist_t = time.monotonic()
+                last_persist_bytes = done
+                await manager.persist(task)
 
         live = manager.get_task(tid)
         if live:

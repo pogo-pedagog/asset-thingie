@@ -8,12 +8,24 @@ const STOCK_CHECKPOINT = "CheckpointLoaderSimple";
 const MIME = "application/x-at-checkpoint";
 
 let canvasDropInstalled = false;
+const CANVAS_DROP_RETRY_MS = 250;
+const CANVAS_DROP_RETRY_MAX = 40;
 
 function initCanvasCheckpointDrop() {
   if (canvasDropInstalled) return;
-  canvasDropInstalled = true;
-  const canvasEl = document.getElementById("graph-canvas");
-  if (!canvasEl) return;
+  let attempts = 0;
+
+  const tryInstall = () => {
+    if (canvasDropInstalled) return;
+    const canvasEl = document.getElementById("graph-canvas");
+    if (!canvasEl) {
+      attempts += 1;
+      if (attempts < CANVAS_DROP_RETRY_MAX) {
+        setTimeout(tryInstall, CANVAS_DROP_RETRY_MS);
+      }
+      return;
+    }
+    canvasDropInstalled = true;
 
   let highlightNode = null;
   let prevColor = undefined;
@@ -101,6 +113,9 @@ function initCanvasCheckpointDrop() {
 
     app.graph.setDirtyCanvas(true, true);
   });
+  };
+
+  tryInstall();
 }
 
 app.registerExtension({

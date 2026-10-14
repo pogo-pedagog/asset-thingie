@@ -19,6 +19,24 @@ from at_comfy.enrichment import (
 )
 
 
+def _fake_httpx_stream(body: bytes):
+    class _Resp:
+        is_success = True
+
+        async def aiter_bytes(self):
+            if body:
+                yield body
+
+    class _Ctx:
+        async def __aenter__(self):
+            return _Resp()
+
+        async def __aexit__(self, *args):
+            return None
+
+    return _Ctx()
+
+
 def test_apply_civitai_writes_source_metadata_and_syncs_file_content_type(tmp_comfy_base: Path) -> None:
     conn = get_conn()
     p = tmp_comfy_base / "loras" / "dl.safetensors"
@@ -454,6 +472,11 @@ async def test_fetch_cover_image_fallback_keeps_downloaded_mp4(
                 r.content = image_payload
             return r
 
+        def stream(self, method, url, headers=None):
+            u = str(url)
+            body = b"local_mp4_bytes" if u.endswith(".mp4") else b""
+            return _fake_httpx_stream(body)
+
     monkeypatch.setattr("at_comfy.enrichment.poster_jpeg_from_video_file", poster_from_file_fails)
     monkeypatch.setattr("at_comfy.enrichment.httpx.AsyncClient", FakeVideoThenImageClient)
 
@@ -520,6 +543,11 @@ async def test_fetch_cover_downloaded_mp4_falls_back_to_url_poster_when_file_ext
                 content = b"downloaded_mp4" if u.endswith(".mp4") else b""
 
             return R()
+
+        def stream(self, method, url, headers=None):
+            u = str(url)
+            body = b"downloaded_mp4" if u.endswith(".mp4") else b""
+            return _fake_httpx_stream(body)
 
     monkeypatch.setattr("at_comfy.enrichment.poster_jpeg_from_video_file", poster_from_file_fails)
     monkeypatch.setattr("at_comfy.enrichment.poster_jpeg_from_video_url", poster_from_url_ok)

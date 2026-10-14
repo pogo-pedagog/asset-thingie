@@ -39,6 +39,30 @@ def first_tag_sorted(tags: list[str]) -> str:
     return sorted((str(t) for t in tags), key=str.lower)[0]
 
 
+def comfy_folder_for_model_type(model_type: str) -> str | None:
+    """Map Civitai model ``type`` string to a Comfy ``folder_paths`` key."""
+    low = (model_type or "").strip().lower().replace(" ", "").replace("_", "")
+    if low in ("lora", "locon", "dora", "lycoris"):
+        return "loras"
+    if low == "checkpoint":
+        return "checkpoints"
+    if low == "textualinversion":
+        return "embeddings"
+    if low == "vae":
+        return "vae"
+    if low == "controlnet":
+        return "controlnet"
+    if low == "upscaler":
+        return "upscale_models"
+    if low == "hypernetwork":
+        return "hypernetworks"
+    if low == "motionmodule":
+        return "animatediff_models"
+    if low == "other":
+        return None
+    return None
+
+
 def resolve_install_dir_for_download(
     model_type: str,
     config: ATComfyConfig,
@@ -50,15 +74,20 @@ def resolve_install_dir_for_download(
     first_tag: str = "",
     subpath_template: str = "{category}",
 ) -> Path:
-    """Target directory under Comfy ``loras`` or ``checkpoints`` root."""
+    """Target directory under the Comfy folder root for ``model_type``."""
     from at_comfy.comfy_paths import get_folder_paths_list
 
-    low = (model_type or "").strip().lower()
-    if low == "checkpoint":
-        roots = get_folder_paths_list("checkpoints", config)
+    folder_key = comfy_folder_for_model_type(model_type)
+    if folder_key is None:
+        raise ValueError(f"unsupported model type: {model_type or 'unknown'}")
+    roots = get_folder_paths_list(folder_key, config)
+    if not roots:
+        if folder_key in ("loras", "checkpoints"):
+            root = Path.cwd()
+        else:
+            raise ValueError(f"Comfy has no folder configured for {folder_key} ({model_type})")
     else:
-        roots = get_folder_paths_list("loras", config)
-    root = Path(roots[0]).resolve() if roots else Path.cwd()
+        root = Path(roots[0]).resolve()
     cat = (category or "General").strip() or "General"
     sub = (subcategory or "").strip()
     nested = expand_subpath_template(

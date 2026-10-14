@@ -33,6 +33,8 @@ export const useAssetsStore = defineStore("at-loras-assets", () => {
   const loading = ref(false);
   const loadingMore = ref(false);
   const error = ref<string | null>(null);
+  let listGen = 0;
+  let detailReqId = 0;
 
   const searchQuery = ref("");
   const debouncedSearch = ref("");
@@ -282,11 +284,15 @@ export const useAssetsStore = defineStore("at-loras-assets", () => {
       await checkHealth();
       if (!connected.value) return;
     }
+    let gen: number;
     if (reset) {
+      gen = ++listGen;
       offset.value = 0;
       items.value = [];
+    } else {
+      if (loading.value || loadingMore.value) return;
+      gen = listGen;
     }
-    if (loading.value || loadingMore.value) return;
     loading.value = true;
     error.value = null;
     try {
@@ -294,6 +300,7 @@ export const useAssetsStore = defineStore("at-loras-assets", () => {
         ...assetQueryBody(),
         offset: offset.value,
       });
+      if (gen !== listGen) return;
       total.value = res.total;
       if (reset) {
         items.value = res.items;
@@ -302,15 +309,19 @@ export const useAssetsStore = defineStore("at-loras-assets", () => {
       }
       refreshStackState();
     } catch (e) {
+      if (gen !== listGen) return;
       error.value = e instanceof Error ? e.message : "Load failed";
       if (reset) items.value = [];
     } finally {
-      loading.value = false;
+      if (gen === listGen) {
+        loading.value = false;
+      }
     }
   }
 
   async function loadMore(): Promise<void> {
     if (!hasMore.value || loading.value || loadingMore.value) return;
+    const gen = listGen;
     loadingMore.value = true;
     offset.value = items.value.length;
     try {
@@ -318,13 +329,17 @@ export const useAssetsStore = defineStore("at-loras-assets", () => {
         ...assetQueryBody(),
         offset: offset.value,
       });
+      if (gen !== listGen) return;
       total.value = res.total;
       items.value = [...items.value, ...res.items];
       refreshStackState();
     } catch (e) {
+      if (gen !== listGen) return;
       error.value = e instanceof Error ? e.message : "Load failed";
     } finally {
-      loadingMore.value = false;
+      if (gen === listGen) {
+        loadingMore.value = false;
+      }
     }
   }
 
@@ -414,15 +429,21 @@ export const useAssetsStore = defineStore("at-loras-assets", () => {
   async function loadDetail(): Promise<void> {
     const id = selectedAssetId.value;
     if (id == null) return;
+    const req = ++detailReqId;
     detailLoading.value = true;
     try {
-      detail.value = await api.fetchAssetDetail(id);
+      const row = await api.fetchAssetDetail(id);
+      if (req !== detailReqId || id !== selectedAssetId.value) return;
+      detail.value = row;
       refreshStackState();
     } catch (e) {
+      if (req !== detailReqId) return;
       showToast(e instanceof Error ? e.message : "Detail load failed");
       detail.value = null;
     } finally {
-      detailLoading.value = false;
+      if (req === detailReqId) {
+        detailLoading.value = false;
+      }
     }
   }
 

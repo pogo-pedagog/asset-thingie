@@ -138,6 +138,7 @@ function onSourceChange(ev: Event): void {
 }
 
 async function batchDownloadSelected(): Promise<void> {
+  if (browse.activeSource !== "civitai") return;
   const payload: Record<string, unknown>[] = [];
   for (const id of batchIds.value) {
     const it = items.value.find((x) => String(x.id) === id);
@@ -205,6 +206,12 @@ async function batchDownloadSelected(): Promise<void> {
             type="button"
             class="at-btn"
             :class="{ 'at-btn--on': batchMode }"
+            :disabled="browse.activeSource === 'civarchive'"
+            :title="
+              browse.activeSource === 'civarchive'
+                ? 'Batch download is not supported for CivArchive yet'
+                : undefined
+            "
             @click="browse.setBatchMode(!batchMode)"
           >
             {{ batchMode ? "Exit batch" : "Batch select" }}

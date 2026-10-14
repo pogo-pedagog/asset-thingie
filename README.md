@@ -23,9 +23,17 @@ ComfyUI custom nodes for managing models — browse CivitAI, download checkpoint
    pip install -e /path/to/asset-thingie/at-comfy
    ```
 
-3. Restart ComfyUI. The sidebars and API routes register automatically.
+3. Build the sidebar UI bundles (Node 20+ and npm required for git/source installs):
 
-If you want to develop the sidebar frontends, see [`at-comfy/README.md`](at-comfy/README.md) for build instructions.
+   ```bash
+   make build
+   ```
+
+   Registry installs from ComfyUI Manager include pre-built bundles. If the Browse, LoRAs, or Checkpoints tabs show a missing-bundle error, run `make build` in the repo root.
+
+4. Restart ComfyUI. The sidebars and API routes register automatically.
+
+For frontend development details, see [`at-comfy/README.md`](at-comfy/README.md).
 
 ## Configuration
 

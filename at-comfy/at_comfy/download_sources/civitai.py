@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-import hashlib
+import asyncio
 from pathlib import Path
 from typing import Any
 
 from at_comfy.civitai.client import CivitaiClient
 from at_comfy.config import ATComfyConfig
 from at_comfy.download_sources.types import PreparedDownload
+from at_comfy.hashing import file_sha256_sync
 from at_comfy.install_paths import civitai_filename_with_id, first_tag_sorted, resolve_install_dir_for_download
 from at_comfy.models.download import DuplicateResolution
 
@@ -52,11 +53,8 @@ async def prepare_civitai_download(body: dict[str, Any], cfg: ATComfyConfig) -> 
     if dest.exists() and dest.stat().st_size > 0 and dup == DuplicateResolution.SKIP:
         exp = (file.sha256 or "").strip().upper()
         if exp:
-            hasher = hashlib.sha256()
-            with open(dest, "rb") as f:
-                for chunk in iter(lambda: f.read(65536), b""):
-                    hasher.update(chunk)
-            if hasher.hexdigest().upper() == exp:
+            got = await asyncio.to_thread(file_sha256_sync, dest)
+            if got.upper() == exp:
                 raise ValueError("already installed (skip)")
 
     cand = [file.download_url]

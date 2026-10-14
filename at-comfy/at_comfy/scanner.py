@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import logging
 import shutil
@@ -14,6 +13,7 @@ from typing import Any
 from at_comfy.comfy_paths import get_folder_paths_list
 from at_comfy.config import ATComfyConfig, cache_root, load_config
 from at_comfy.db import get_conn
+from at_comfy.hashing import file_sha256_sync
 from at_comfy.safetensors_header import normalize_lora_metadata, read_safetensors_metadata
 from at_comfy.scan_state import scan_reset, scan_set
 
@@ -44,12 +44,17 @@ def _iter_model_files(root: Path):
             yield p
 
 
-def file_sha256_sync(path: Path) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(65536), b""):
-            h.update(chunk)
-    return h.hexdigest().upper()
+def _list_scan_files(dirs: dict[str, list[str]]) -> list[tuple[str, Path]]:
+    all_files: list[tuple[str, Path]] = []
+    for scan_family, roots in dirs.items():
+        if scan_family not in ("loras", "checkpoints"):
+            continue
+        fam_key = "checkpoints" if scan_family == "checkpoints" else "loras"
+        for root_s in roots:
+            root = Path(root_s)
+            for f in _iter_model_files(root):
+                all_files.append((fam_key, f))
+    return all_files
 
 
 def _infer_types(
@@ -303,15 +308,8 @@ async def run_full_scan(*, config: ATComfyConfig | None = None) -> None:
         cfg = config or load_config()
         scan_reset()
         scan_set(running=True, phase="listing", done=0, total=0, message="")
-        all_files: list[tuple[str, Path]] = []
         dirs = get_scan_dirs(cfg)
-        for scan_family, roots in dirs.items():
-            if scan_family not in ("loras", "checkpoints"):
-                continue
-            for root_s in roots:
-                root = Path(root_s)
-                for f in _iter_model_files(root):
-                    all_files.append(("checkpoints" if scan_family == "checkpoints" else "loras", f))
+        all_files = await asyncio.to_thread(_list_scan_files, dirs)
 
         scan_set(total=len(all_files), phase="indexing", message="indexing")
         indexed: set[str] = set()

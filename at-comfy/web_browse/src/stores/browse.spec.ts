@@ -375,4 +375,61 @@ describe("browse store", () => {
     expect(s.lastPageItemIds).toEqual(["301"]);
     expect(s.items.map((i) => i.id)).toContain(301);
   });
+
+  it("in-flight civitai page does not write into civarchive slice after source switch", async () => {
+    const s = useBrowseStore();
+    s.nextPage = "https://civitai.com/api/v1/models?cursor=x";
+    s.lastPageItemIds = ["1"];
+
+    let resolvePage!: (v: Response) => void;
+    const mockFetch = vi.fn().mockImplementationOnce(
+      () => new Promise<Response>((r) => { resolvePage = r; }),
+    );
+    vi.stubGlobal("fetch", mockFetch as unknown as typeof fetch);
+
+    const loadP = s.loadMore();
+    s.setActiveSource("civarchive");
+    const caItemsBefore = s.slices.civarchive.items.length;
+
+    resolvePage!(
+      new Response(JSON.stringify({ items: [makeItem(500)], next_page: null }), { status: 200 }),
+    );
+    await loadP;
+
+    expect(s.slices.civarchive.items.length).toBe(caItemsBefore);
+    expect(s.slices.civitai.items.some((i) => i.id === 500)).toBe(true);
+  });
+
+  it("openModel ignores stale detail when a newer request finishes first", async () => {
+    const s = useBrowseStore();
+    const detailSpy = vi.spyOn(api, "browseDetail");
+
+    let resolveA!: (v: Record<string, unknown>) => void;
+    let resolveB!: (v: Record<string, unknown>) => void;
+    detailSpy
+      .mockImplementationOnce(() => new Promise((r) => { resolveA = r; }))
+      .mockImplementationOnce(() => new Promise((r) => { resolveB = r; }));
+
+    const pA = s.openModel(1);
+    const pB = s.openModel(2);
+
+    resolveB!({ id: 2, name: "B" });
+    await pB;
+    expect(s.detailLoading).toBe(false);
+    expect(s.selected?.id).toBe(2);
+
+    resolveA!({ id: 1, name: "A" });
+    await pA;
+    expect(s.selected?.id).toBe(2);
+
+    detailSpy.mockRestore();
+  });
+
+  it("switching to civarchive clears batch mode", () => {
+    const s = useBrowseStore();
+    s.setBatchMode(true);
+    expect(s.batchMode).toBe(true);
+    s.setActiveSource("civarchive");
+    expect(s.batchMode).toBe(false);
+  });
 });

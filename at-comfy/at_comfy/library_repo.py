@@ -454,15 +454,27 @@ def parse_trigger_words_json(raw: str | None) -> list[str]:
 
 
 def civitai_version_ids_in_library(conn: sqlite3.Connection, version_ids: list[int]) -> set[int]:
-    """``library_files`` rows enriched with Civitai version id."""
+    """``source_metadata`` rows for Civitai-normalized assets."""
     if not version_ids:
         return set()
-    placeholders = ",".join("?" * len(version_ids))
+    str_ids = [str(v) for v in version_ids]
+    placeholders = ",".join("?" * len(str_ids))
     rows = conn.execute(
-        f"SELECT DISTINCT civitai_version_id FROM library_files WHERE civitai_version_id IN ({placeholders})",
-        version_ids,
+        f"""
+        SELECT DISTINCT external_version_id FROM source_metadata
+        WHERE source = 'civitai' AND external_version_id IN ({placeholders})
+        """,
+        str_ids,
     ).fetchall()
-    return {int(r["civitai_version_id"]) for r in rows if r["civitai_version_id"] is not None}
+    out: set[int] = set()
+    for r in rows:
+        if r["external_version_id"] is None:
+            continue
+        try:
+            out.add(int(r["external_version_id"]))
+        except (TypeError, ValueError):
+            continue
+    return out
 
 
 def civarchive_version_ids_in_library(conn: sqlite3.Connection, version_ids: list[str]) -> set[str]:

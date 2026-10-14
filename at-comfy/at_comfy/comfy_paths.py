@@ -15,11 +15,13 @@ COMFY_TOPLEVEL_FOR_FOLDER_TYPE: dict[str, frozenset[str]] = {
 
 
 def get_folder_paths_list(folder_type: str, config: ATComfyConfig) -> list[str]:
-    """``folder_type`` is ``loras`` or ``checkpoints`` (Comfy keys)."""
+    """``folder_type`` is a Comfy ``folder_paths`` key (e.g. ``loras``, ``vae``)."""
+    key = (folder_type or "").strip()
+    if not key:
+        return []
     try:
         import folder_paths  # type: ignore[import-untyped]
 
-        key = "loras" if folder_type == "loras" else "checkpoints"
         override = config.scan_directories.get(key)
         if override:
             return [override]

@@ -1009,13 +1009,25 @@ export function bindATLoraLoaderNode(node) {
 }
 
 let canvasDropInstalled = false;
+const CANVAS_DROP_RETRY_MS = 250;
+const CANVAS_DROP_RETRY_MAX = 40;
 
 /** HTML5 drop from AT sidebar onto ATLoraLoader nodes. */
 export function initAtCanvasLoraDrop() {
   if (canvasDropInstalled) return;
-  canvasDropInstalled = true;
-  const canvasEl = document.getElementById("graph-canvas");
-  if (!canvasEl) return;
+  let attempts = 0;
+
+  const tryInstall = () => {
+    if (canvasDropInstalled) return;
+    const canvasEl = document.getElementById("graph-canvas");
+    if (!canvasEl) {
+      attempts += 1;
+      if (attempts < CANVAS_DROP_RETRY_MAX) {
+        setTimeout(tryInstall, CANVAS_DROP_RETRY_MS);
+      }
+      return;
+    }
+    canvasDropInstalled = true;
   let highlightNode = null;
   let prevColor = undefined;
   const clearHighlight = () => {
@@ -1055,6 +1067,7 @@ export function initAtCanvasLoraDrop() {
     if (!e.dataTransfer?.types?.includes("application/x-at-lora")) return;
     e.preventDefault();
     const c = app.canvas;
+    if (!c?.convertEventToCanvasOffset || !app.graph?.getNodeOnPos) return;
     const [gx, gy] = c.convertEventToCanvasOffset(e);
     const n = app.graph.getNodeOnPos(gx, gy);
     if (!n || (n.comfyClass !== NODE_CLASS && n.type !== NODE_CLASS)) return;
@@ -1070,6 +1083,9 @@ export function initAtCanvasLoraDrop() {
       }),
     );
   });
+  };
+
+  tryInstall();
 }
 
 export const EXT_NAME = "at_loraloader.stack_ui";

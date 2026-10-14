@@ -119,7 +119,7 @@ app.registerExtension({
             if (renderCancelled) return;
             showBrowseError(
               root,
-              `AT Browse: failed to load UI (${err instanceof Error ? err.message : String(err)}). Run npm run build in at-comfy/web_browse.`,
+              `AT Browse: UI bundle not found; run make build in the repo root (${err instanceof Error ? err.message : String(err)}).`,
               err,
             );
           });
@@ -236,7 +236,7 @@ app.registerExtension({
             if (renderCancelled) return;
             showAtLorasError(
               root,
-              `AT Loras: failed to load UI (${err instanceof Error ? err.message : String(err)}). Run npm run build in at-comfy/web_loras.`,
+              `AT Loras: UI bundle not found; run make build in the repo root (${err instanceof Error ? err.message : String(err)}).`,
               err,
             );
           });
@@ -353,7 +353,7 @@ app.registerExtension({
             if (renderCancelled) return;
             showAtCheckpointsError(
               root,
-              `AT Checkpoints: failed to load UI (${err instanceof Error ? err.message : String(err)}). Run npm run build in at-comfy/web_checkpoints.`,
+              `AT Checkpoints: UI bundle not found; run make build in the repo root (${err instanceof Error ? err.message : String(err)}).`,
               err,
             );
           });

@@ -5,8 +5,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import shutil
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -48,6 +50,26 @@ def enrichment_public_status() -> dict[str, Any]:
 
 def _utc_now_iso() -> str:
     return datetime.now(tz=UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+async def _stream_to_file(client: httpx.AsyncClient, url: str, headers: dict[str, str], dest: Path) -> bool:
+    """Stream HTTP body to ``dest`` without holding the full response in memory."""
+    part = dest.with_suffix(dest.suffix + ".part")
+    try:
+        async with client.stream("GET", url, headers=headers) as resp:
+            if not resp.is_success:
+                return False
+            part.parent.mkdir(parents=True, exist_ok=True)
+            with open(part, "wb") as out:
+                async for chunk in resp.aiter_bytes():
+                    if chunk:
+                        await asyncio.to_thread(out.write, chunk)
+            await asyncio.to_thread(os.replace, part, dest)
+            return True
+    except Exception as e:
+        logger.debug("stream download failed: %s", e)
+        part.unlink(missing_ok=True)
+        return False
 
 
 async def _version_with_rich_image_meta(
@@ -477,22 +499,26 @@ async def _fetch_cover(
         if getattr(cfg, "download_example_videos", False):
             try:
                 async with httpx.AsyncClient(timeout=180.0, follow_redirects=True) as c:
-                    r = await c.get(vu, headers=hdr)
-                    if r.is_success and r.content:
-                        dest_mp4.write_bytes(r.content)
+                    await _stream_to_file(c, vu, hdr, dest_mp4)
             except Exception as e:
                 logger.debug("cover video download failed: %s", e)
             if getattr(cfg, "generate_video_posters", True):
                 if dest_mp4.is_file():
-                    poster_jpeg_from_video_file(dest_mp4, dest_jpg)
+                    await asyncio.to_thread(poster_jpeg_from_video_file, dest_mp4, dest_jpg)
                 if not dest_jpg.is_file():
-                    poster_jpeg_from_video_url(vu, dest_jpg, headers=hdr)
+                    hdr_copy = dict(hdr)
+                    await asyncio.to_thread(
+                        lambda: poster_jpeg_from_video_url(vu, dest_jpg, headers=hdr_copy)
+                    )
         else:
             if getattr(cfg, "generate_video_posters", True):
                 if dest_mp4.is_file():
-                    poster_jpeg_from_video_file(dest_mp4, dest_jpg)
+                    await asyncio.to_thread(poster_jpeg_from_video_file, dest_mp4, dest_jpg)
                 if not dest_jpg.is_file():
-                    poster_jpeg_from_video_url(vu, dest_jpg, headers=hdr)
+                    hdr_copy = dict(hdr)
+                    await asyncio.to_thread(
+                        lambda: poster_jpeg_from_video_url(vu, dest_jpg, headers=hdr_copy)
+                    )
         # Only stop here once we have a raster poster; MP4 alone still needs a JPG for grid/thumb.
         if dest_jpg.is_file():
             return
@@ -511,7 +537,7 @@ async def _fetch_cover(
         async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as c:
             r = await c.get(u_orig, headers=hdr)
             if r.is_success and r.content:
-                dest_jpg.write_bytes(r.content)
+                await asyncio.to_thread(dest_jpg.write_bytes, r.content)
     except Exception as e:
         logger.debug("cover image fetch failed: %s", e)
     # Keep local MP4 when this version still has a video cover (poster may come from image fallback).
@@ -582,13 +608,18 @@ async def _fetch_example_media(
                         if not (r.is_success and r.content):
                             r = await c.get(u_fallback, headers=hdr_f)
                         if r.is_success and r.content:
-                            full_img.write_bytes(r.content)
+                            await asyncio.to_thread(full_img.write_bytes, r.content)
                     if full_img.is_file() and full_img.stat().st_size > 0:
                         if not full_thumb.is_file() or full_thumb.stat().st_size == 0:
-                            if not jpeg_thumbnail_from_image_file(full_img, full_thumb, max_side=200):
+                            thumb_ok = await asyncio.to_thread(
+                                lambda img=full_img, thumb=full_thumb: jpeg_thumbnail_from_image_file(
+                                    img, thumb, max_side=200
+                                )
+                            )
+                            if not thumb_ok:
                                 rt = await c.get(civitai_image_url_with_width(base_disp, 200), headers=hdr_t)
                                 if rt.is_success and rt.content:
-                                    full_thumb.write_bytes(rt.content)
+                                    await asyncio.to_thread(full_thumb.write_bytes, rt.content)
                 except Exception as e:
                     logger.debug("example image failed: %s", e)
                     continue
@@ -635,15 +666,24 @@ async def _fetch_example_media(
                 try:
                     if cfg.download_example_videos:
                         if not video_path.is_file() or video_path.stat().st_size == 0:
-                            r = await c.get(vu, headers=hdr)
-                            if r.is_success and r.content:
-                                video_path.write_bytes(r.content)
+                            await _stream_to_file(c, vu, hdr, video_path)
                         if video_path.is_file() and video_path.stat().st_size > 0:
                             if cfg.generate_video_posters:
-                                if not poster_jpeg_from_video_file(video_path, poster_path):
-                                    poster_jpeg_from_video_url(vu, poster_path, headers=dict(hdr))
+                                ok_poster = await asyncio.to_thread(
+                                    poster_jpeg_from_video_file, video_path, poster_path
+                                )
+                                if not ok_poster:
+                                    hdr_v = dict(hdr)
+                                    await asyncio.to_thread(
+                                        lambda u=vu, p=poster_path, h=hdr_v: poster_jpeg_from_video_url(
+                                            u, p, headers=h
+                                        )
+                                    )
                     elif cfg.generate_video_posters:
-                        poster_jpeg_from_video_url(vu, poster_path, headers=dict(hdr))
+                        hdr_v = dict(hdr)
+                        await asyncio.to_thread(
+                            lambda u=vu, p=poster_path, h=hdr_v: poster_jpeg_from_video_url(u, p, headers=h)
+                        )
                 except Exception as e:
                     logger.debug("example video failed: %s", e)
                     continue
@@ -656,13 +696,17 @@ async def _fetch_example_media(
 
                 thumb_final: str | None = None
                 if poster_ok:
-                    if jpeg_thumbnail_from_image_file(poster_path, thumb_path, max_side=200):
+                    if await asyncio.to_thread(
+                        lambda p=poster_path, t=thumb_path: jpeg_thumbnail_from_image_file(p, t, max_side=200)
+                    ):
                         thumb_final = thumb_name
                     else:
                         thumb_final = poster_name
                 elif play_ok:
                     # Avoid pointing ``thumbnail_local_path`` at an MP4 (breaks ``<img>`` tiles).
-                    if cfg.generate_video_posters and poster_jpeg_from_video_file(video_path, thumb_path):
+                    if cfg.generate_video_posters and await asyncio.to_thread(
+                        poster_jpeg_from_video_file, video_path, thumb_path
+                    ):
                         thumb_final = thumb_name
                     else:
                         thumb_final = None

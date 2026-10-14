@@ -269,6 +269,7 @@ export const useBrowseStore = defineStore("at-browse", () => {
   });
 
   const detailLoading = ref(false);
+  let detailReqId = 0;
   const category = ref("General");
   const duplicateResolution = ref<"skip" | "replace">("skip");
 
@@ -282,6 +283,9 @@ export const useBrowseStore = defineStore("at-browse", () => {
 
   function setActiveSource(id: BrowseSourceId): void {
     activeSource.value = id;
+    if (id === "civarchive") {
+      setBatchMode(false);
+    }
   }
 
   function searchParams(): api.BrowseSearchParams {
@@ -317,11 +321,12 @@ export const useBrowseStore = defineStore("at-browse", () => {
   }
 
   function _applyFetchedPage(
+    s: BrowseSlice,
+    src: BrowseSourceId,
     fetchedItems: CivitaiBrowseItem[],
     requestedUrl: string | null,
     returnedNextPage: string | null,
   ): boolean {
-    const s = sl();
     const rawIds = fetchedItems.map((i) => String(i.id));
     let dec = stabilizePaginationChain({
       requestedPageUrl: requestedUrl,
@@ -329,7 +334,7 @@ export const useBrowseStore = defineStore("at-browse", () => {
       returnedItemIds: rawIds,
       lastPageItemIds: s.lastPageItemIds.length ? [...s.lastPageItemIds] : null,
     });
-    if (requestedUrl && activeSource.value === "civitai") {
+    if (requestedUrl && src === "civitai") {
       const unrelated = stopReasonForUnrelatedAppendPage(s.searchType, s.q, fetchedItems);
       if (unrelated) {
         dec = { nextUrl: null, discardPage: true, stopReason: unrelated };
@@ -364,7 +369,7 @@ export const useBrowseStore = defineStore("at-browse", () => {
     try {
       const res = await api.browsePage(src, requested, searchParams());
       if (gen !== searchGeneration[src]) return;
-      _applyFetchedPage(res.items, requested, res.next_page ?? null);
+      _applyFetchedPage(s, src, res.items, requested, res.next_page ?? null);
     } catch (e) {
       if (gen !== searchGeneration[src]) return;
       error.value = e instanceof Error ? e.message : "Load more failed";
@@ -373,13 +378,15 @@ export const useBrowseStore = defineStore("at-browse", () => {
     }
   }
 
-  function drainBuffer(): number {
-    const s = sl();
+  function drainBuffer(targetSlice: BrowseSlice = sl()): number {
+    const s = targetSlice;
     if (s.buffer.length === 0) return 0;
     const chunk = s.buffer.slice(0, RENDER_CHUNK);
     s.buffer = s.buffer.slice(RENDER_CHUNK);
     s.items = [...s.items, ...chunk];
-    _maybePrefetch();
+    if (s === sl()) {
+      _maybePrefetch();
+    }
     return chunk.length;
   }
 
@@ -405,8 +412,8 @@ export const useBrowseStore = defineStore("at-browse", () => {
         s.buffer = [];
         s.lastPageItemIds = [];
       }
-      _applyFetchedPage(res.items, null, res.next_page ?? null);
-      drainBuffer();
+      _applyFetchedPage(s, src, res.items, null, res.next_page ?? null);
+      drainBuffer(s);
     } catch (e) {
       if (gen !== searchGeneration[src]) return;
       error.value = e instanceof Error ? e.message : "Search failed";
@@ -425,28 +432,34 @@ export const useBrowseStore = defineStore("at-browse", () => {
     const s = sl();
     if (loading.value) return;
     if (s.buffer.length > 0) {
-      drainBuffer();
+      drainBuffer(s);
       return;
     }
     if (!s.nextPage || fetching.value) return;
     await _fetchNextPage();
-    drainBuffer();
+    drainBuffer(s);
   }
 
   async function openModel(id: number | string): Promise<void> {
     const src = activeSource.value;
+    const s = sl();
     const itemRef = String(id);
+    const req = ++detailReqId;
     error.value = null;
     detailLoading.value = true;
-    sl().selected = null;
+    s.selected = null;
     try {
       const raw = await api.browseDetail(src, itemRef, !hideNsfwFromConfig.value);
-      sl().selected = raw as unknown as CivitaiModelDetail;
+      if (req !== detailReqId) return;
+      s.selected = raw as unknown as CivitaiModelDetail;
       error.value = null;
     } catch (e) {
+      if (req !== detailReqId) return;
       error.value = e instanceof Error ? e.message : "Detail failed";
     } finally {
-      detailLoading.value = false;
+      if (req === detailReqId) {
+        detailLoading.value = false;
+      }
     }
   }
 
