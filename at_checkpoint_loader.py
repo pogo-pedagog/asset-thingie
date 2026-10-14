@@ -28,18 +28,27 @@ class ATCheckpointLoader:
 
     RETURN_TYPES = ("MODEL", "CLIP", "VAE")
     RETURN_NAMES = ("model", "clip", "vae")
+    OUTPUT_TOOLTIPS = (
+        "The model used for denoising latents.",
+        "The CLIP model used for encoding text prompts.",
+        "The VAE model used for encoding and decoding images to and from latent space.",
+    )
     FUNCTION = "load_checkpoint"
     CATEGORY = "loaders"
+    DESCRIPTION = "Loads a diffusion checkpoint and optionally sets CLIP skip, matching CheckpointLoaderSimple plus CLIP Set Last Layer."
+    SEARCH_ALIASES = ["load model", "checkpoint", "model loader", "load checkpoint", "ckpt", "clip skip"]
 
     def load_checkpoint(self, ckpt_name: str, clip_skip: int) -> tuple[Any, Any, Any]:
         import comfy.sd  # type: ignore[import-not-found]
         import folder_paths  # type: ignore[import-not-found]
 
-        ckpt_path = folder_paths.get_full_path("checkpoints", ckpt_name)
+        ckpt_path = folder_paths.get_full_path_or_raise("checkpoints", ckpt_name)
+        embedding_directory = folder_paths.get_folder_paths("embeddings")
         out = comfy.sd.load_checkpoint_guess_config(
             ckpt_path,
             output_vae=True,
             output_clip=True,
+            embedding_directory=embedding_directory,
         )
         model, clip, vae = out[0], out[1], out[2]
 

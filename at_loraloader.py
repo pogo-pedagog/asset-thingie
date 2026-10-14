@@ -83,8 +83,14 @@ class ATLoraLoader:
 
     RETURN_TYPES = ("MODEL", "CLIP")
     RETURN_NAMES = ("model", "clip")
+    OUTPUT_TOOLTIPS = (
+        "The diffusion model with the enabled LoRAs applied.",
+        "The CLIP model with the enabled LoRAs applied.",
+    )
     FUNCTION = "apply"
     CATEGORY = "loaders"
+    DESCRIPTION = "Applies one or more LoRAs from a JSON stack, using the same loader as the built-in LoraLoader."
+    SEARCH_ALIASES = ["lora", "load lora", "apply lora", "lora loader", "lora stack"]
 
     def apply(self, model: Any, clip: Any, stack_snapshot: str) -> tuple[Any, Any]:
         stack, _stack_out = _parse_snapshot(stack_snapshot)

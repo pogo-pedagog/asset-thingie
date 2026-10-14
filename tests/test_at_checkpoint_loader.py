@@ -13,12 +13,17 @@ def _get_filename_list(kind: str) -> list[str]:
     return ["test.safetensors"]
 
 
-def _get_full_path(kind: str, name: str) -> str:
+def _get_full_path_or_raise(kind: str, name: str) -> str:
     return f"/models/{kind}/{name}"
 
 
+def _get_folder_paths(kind: str) -> list[str]:
+    return [f"/models/{kind}"]
+
+
 _fp.get_filename_list = _get_filename_list
-_fp.get_full_path = _get_full_path
+_fp.get_full_path_or_raise = _get_full_path_or_raise
+_fp.get_folder_paths = _get_folder_paths
 sys.modules["folder_paths"] = _fp
 
 
@@ -43,14 +48,26 @@ class _FakeClip:
         return None
 
 
+_last_load_kwargs: dict = {}
+
+
 def _fake_load_checkpoint_guess_config(
     ckpt_path: str,
     *,
     output_vae: bool = True,
     output_clip: bool = True,
+    embedding_directory=None,
+    **_kwargs,
 ) -> tuple:
+    _last_load_kwargs.clear()
+    _last_load_kwargs.update(
+        ckpt_path=ckpt_path,
+        output_vae=output_vae,
+        output_clip=output_clip,
+        embedding_directory=embedding_directory,
+    )
     clip = _FakeClip(clip_layer_returns_new=False)
-    return ("MODEL", clip, "VAE")
+    return ("MODEL", clip, "VAE", None)
 
 
 def _fake_load_returning_clip_that_returns_new_from_clip_layer(
@@ -58,9 +75,11 @@ def _fake_load_returning_clip_that_returns_new_from_clip_layer(
     *,
     output_vae: bool = True,
     output_clip: bool = True,
+    embedding_directory=None,
+    **_kwargs,
 ) -> tuple:
     clip = _FakeClip(clip_layer_returns_new=True)
-    return ("MODEL", clip, "VAE")
+    return ("MODEL", clip, "VAE", None)
 
 
 _comfy_sd = ModuleType("comfy.sd")
@@ -119,3 +138,12 @@ def test_at_checkpoint_loader_returns_three_outputs() -> None:
     n = ATCheckpointLoader()
     out = n.load_checkpoint("test.safetensors", 0)
     assert len(out) == 3
+
+
+def test_at_checkpoint_loader_passes_embeddings_directory() -> None:
+    n = ATCheckpointLoader()
+    n.load_checkpoint("test.safetensors", 0)
+    assert _last_load_kwargs["ckpt_path"] == "/models/checkpoints/test.safetensors"
+    assert _last_load_kwargs["embedding_directory"] == ["/models/embeddings"]
+    assert _last_load_kwargs["output_vae"] is True
+    assert _last_load_kwargs["output_clip"] is True
